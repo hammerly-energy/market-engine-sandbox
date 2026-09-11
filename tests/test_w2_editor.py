@@ -1020,9 +1020,16 @@ class TestTheGrammarModulesAreServed:
 # 2. A unique optimum, asserted before it is relied on. What is slack-
 #    invariant is the SET of optimal prices; which member of it the solver
 #    hands back is not guaranteed, and under degeneracy a different PTDF can
-#    pivot to a different vertex. On a degenerate fixture this test flakes,
-#    correctly -- trap 3 against trap 2. So uniqueness is a precondition with
-#    its own tests rather than a remark.
+#    pivot to a different vertex. On a degenerate fixture this test would
+#    flake, correctly -- trap 3 against trap 2. So uniqueness is a precondition
+#    with its own tests rather than a remark.
+#
+#    That flake is still unobserved, and W2.9 measured why. No setting of
+#    w1.yaml's limits reaches a degenerate AND congested optimum -- swept over
+#    1201 DE ratings and all 24 hours, the only pattern is basic 0 against 1
+#    row, which is uncongested, and trap 2 says lambda does not move with the
+#    slack there. See tests/test_w2_degenerate_optimum.py, which asserts the
+#    five slacks agreeing at that breakpoint.
 
 SLACK_TOL = 1e-9        # far above the measured 1.1e-10 debris
 LAMBDA_MOVE = 1.0       # far below the smallest real move, $9.94 at slack C
