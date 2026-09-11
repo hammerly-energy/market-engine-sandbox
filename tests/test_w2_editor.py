@@ -9,6 +9,7 @@ look like a frontend bug for an afternoon.
 
 import json
 import math
+import re
 from pathlib import Path
 
 import pytest
@@ -183,3 +184,199 @@ class TestTheSeedIsServedAndPostable:
         # state.js refuses a 41st bid before posting, which it can only do if
         # the cap is on the wire.
         assert client.get("/limits").json()["max_bids"] == bounds.MAX_BIDS
+
+
+# --------------------------------------------------------------------- W2.2
+# Transport. postClear(state), request coalescing by monotonic id, and one
+# error surface that switches on the stable code and prints the detail
+# verbatim.
+#
+# The coalescing itself cannot be tested from pytest -- it is JavaScript, and
+# there is no node in this environment. What CAN rot here, silently and
+# expensively, is the contract between the two halves: the frontend branches
+# on `code`, and bounds.py owns the list of codes. A refusal added on the
+# server with no branch on the client renders as a bare code with no heading
+# and no advice, and nothing anywhere would say so.
+#
+# So the surface is asserted against the server BEHAVIOURALLY: each body
+# below is one this server refuses, and the code it answers with must be one
+# web/js/errors.js knows. Provoked over HTTP rather than grepped out of
+# bounds.py, so a code that moves between modules is still covered.
+
+ERRORS_JS = Path("web/js/errors.js")
+
+
+def _known_codes():
+    """The codes web/js/errors.js has a branch for.
+
+    Parsed rather than imported, because there is no JavaScript runtime here.
+    The table is a flat object literal of `code: {` entries, so this reads it
+    the only way Python can and would fail loudly if it stopped being one.
+    """
+    entries = re.findall(r"^  ([a-z_][a-z0-9_]*): \{", ERRORS_JS.read_text(), re.M)
+    assert entries, "no codes parsed out of errors.js -- the table changed shape"
+    return set(entries)
+
+
+def _too_many(seed, what, n):
+    """A config over one cap, built from the seed so nothing else is wrong."""
+    config = json.loads(json.dumps(seed["config"]))
+    if what == "buses":
+        config["network"]["buses"] = [f"b{i}" for i in range(n)]
+    elif what == "branches":
+        config["network"]["branches"] = {
+            f"x{i}": {"from": "A", "to": "B", "reactance_pu": 0.03, "limit_mw": "inf"}
+            for i in range(n)
+        }
+    elif what == "generators":
+        config["fleet"] = {
+            f"g{i}": {"bus": "A", "cost_usd_per_mwh": 25.0, "pmax_mw": 100.0}
+            for i in range(n)
+        }
+    elif what == "bids":
+        config["load"]["bids"] = {
+            f"d{i}": {"bus": "B", "peak_mw": 1.0, "value_usd_per_mwh": 5000.0}
+            for i in range(n)
+        }
+    elif what == "hours":
+        config["load"]["shape"] = [1.0] * n
+    return config
+
+
+class TestTheErrorSurfaceKnowsEveryCodeTheServerEmits:
+    """Every refusal this server can answer with has a branch in errors.js.
+
+    A missing branch is not a crash -- describe() falls back to the code as
+    its own heading -- which is exactly why it needs a test. It would ship as
+    a visitor reading `too_many_bids` where a sentence belonged.
+    """
+
+    def test_a_malformed_body_is_a_known_code(self, client):
+        r = client.post("/clear", content=b"{not json", headers={"content-type": "application/json"})
+        assert r.json()["error"] == "malformed_json"
+        assert "malformed_json" in _known_codes()
+
+    def test_an_oversized_body_is_a_known_code(self, client):
+        r = client.post(
+            "/clear",
+            content=b'{"config":"' + b"x" * (bounds.MAX_BODY_BYTES + 1) + b'"}',
+            headers={"content-type": "application/json"},
+        )
+        assert r.status_code == 413
+        assert r.json()["error"] == "body_too_large"
+        assert "body_too_large" in _known_codes()
+
+    def test_a_scenario_the_engine_refuses_is_a_known_code(self, client, seed):
+        # A slack that is not a bus: an assertion by the caller, and the check
+        # that catches the editor letting its dropdown drift (W2.6).
+        r = client.post("/clear", json={"config": seed["config"], "slack": "Z"})
+        assert r.json()["error"] == "invalid_scenario"
+        assert "Z" in r.json()["detail"]  # the detail names the bus, so it is shown as sent
+        assert "invalid_scenario" in _known_codes()
+
+    def test_a_forbidden_load_source_is_a_known_code(self, client, seed):
+        config = json.loads(json.dumps(seed["config"]))
+        config["load"]["source"] = "eia930"
+        r = client.post("/clear", json={"config": config})
+        assert r.json()["error"] == "unsupported_load_source"
+        assert "unsupported_load_source" in _known_codes()
+
+    @pytest.mark.parametrize(
+        "what, n",
+        [
+            ("buses", bounds.MAX_BUSES + 1),
+            ("branches", bounds.MAX_BRANCHES + 1),
+            ("generators", bounds.MAX_GENERATORS + 1),
+            ("bids", bounds.MAX_BIDS + 1),
+            ("hours", bounds.MAX_HOURS + 1),
+        ],
+    )
+    def test_every_cap_refusal_is_a_known_code(self, client, seed, what, n):
+        r = client.post("/clear", json={"config": _too_many(seed, what, n)})
+        assert r.json()["error"] == f"too_many_{what}"
+        assert f"too_many_{what}" in _known_codes()
+
+    def test_an_unclearable_market_is_a_known_code(self, client):
+        """Inelastic load the fleet cannot serve.
+
+        Unreachable from the editor -- toConfig() always emits blocks, and a
+        priced demand side cannot be infeasible on capacity -- but reachable
+        over HTTP, so the surface must still name it.
+        """
+        r = client.post(
+            "/clear",
+            json={
+                "config": {
+                    "name": "short",
+                    "network": {"slack": "A", "buses": ["A", "B"],
+                                "branches": {"AB": {"from": "A", "to": "B",
+                                                    "reactance_pu": 0.03, "limit_mw": "inf"}}},
+                    "fleet": {"g": {"bus": "A", "cost_usd_per_mwh": 10.0, "pmax_mw": 1.0}},
+                    "load": {"source": "static", "mw": {"B": 500.0}},
+                },
+                "slack": "A",
+            },
+        )
+        assert r.json()["error"] == "solve_failed"
+        assert "solve_failed" in _known_codes()
+
+    def test_the_client_only_codes_are_there_too(self):
+        """Failures with no server to name them still get a sentence.
+
+        A fetch that never reached a response is not a statement about the
+        body, so it does not borrow one of the server's codes -- and the one
+        surface still has to render it.
+        """
+        assert {"unreachable", "unreadable_response", "client_error", "unknown_error"} <= _known_codes()
+
+
+class TestWhatTheEditorPostsComesBackPriced:
+    """The seed, posted as the editor posts it, over HTTP.
+
+    W0 asserts the HTTP result matches the in-process one field for field.
+    What this adds is the body the EDITOR sends -- config, an explicit slack,
+    and null limits -- and the fields main.js reads off the response.
+    """
+
+    @pytest.fixture(scope="class")
+    def cleared(self, client, seed):
+        r = client.post(
+            "/clear",
+            json={"config": seed["config"], "slack": seed["slack"], "limits": None},
+        )
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    def test_the_engine_reports_the_slack_it_used(self, cleared, seed):
+        assert cleared["slack"] == seed["slack"]
+
+    def test_one_island_and_it_is_named_by_its_slack(self, cleared, seed):
+        assert list(cleared["islands"]) == [seed["slack"]]
+
+    def test_the_series_the_page_reads_are_all_there(self, cleared):
+        assert len(cleared["hours"]) == 24
+        assert set(cleared["lmp"]) == set(cleared["buses"])
+        assert set(cleared["flows"]) == set(cleared["lines"])
+        assert set(cleared["dispatch"]) == set(cleared["generators"])
+
+    def test_an_explicit_null_limits_is_not_an_override(self, client, seed):
+        """toLimits() emits null, not {}, for an untouched editor.
+
+        Both mean "the scenario's own ratings", and the two must not be able
+        to price differently -- otherwise the posted body's readability would
+        be a market decision.
+        """
+        with_null = client.post(
+            "/clear", json={"config": seed["config"], "slack": seed["slack"], "limits": None}
+        ).json()
+        with_empty = client.post(
+            "/clear", json={"config": seed["config"], "slack": seed["slack"], "limits": {}}
+        ).json()
+        assert with_null["lmp"] == with_empty["lmp"]
+
+
+class TestTheTransportModulesAreServed:
+    def test_errors_is_served_as_javascript(self, client):
+        r = client.get("/js/errors.js")
+        assert r.status_code == 200
+        assert "javascript" in r.headers["content-type"]

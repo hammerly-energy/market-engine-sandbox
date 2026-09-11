@@ -97,3 +97,55 @@ summary {
 }
 
 summary + pre { margin-top: 0.6rem; }
+
+/* ------------------------------------------------------------- W2.2, traffic
+   The request log is evidence, not a view: it says which ids were issued,
+   which one was applied and which were dropped as superseded. Colour carries
+   the same three states the solver returns, and nothing else. */
+
+.note {
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+  margin: 0 0 0.75rem;
+}
+
+.controls {
+  margin: 0 0 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+button {
+  font: inherit;
+  font-size: var(--type-annot);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--ink-muted);
+  border-radius: 3px;
+  padding: 0.25rem 0.7rem;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--ink-2);
+}
+
+.log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--type-annot);
+  font-variant-numeric: tabular-nums;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.log li {
+  padding: 0.1rem 0;
+  border-top: 1px solid var(--grid);
+  color: var(--ink-2);
+}
+
+.log li[data-state="ok"] { color: var(--hue-2); }
+.log li[data-state="error"] { color: var(--flow-pos); }
+.log li[data-state="muted"] { color: var(--ink-muted); }

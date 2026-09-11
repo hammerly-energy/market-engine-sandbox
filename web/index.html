@@ -25,6 +25,26 @@
     <p class="status" id="status">Contacting server…</p>
   </section>
 
+  <section class="panel">
+    <h2>What came back</h2>
+    <dl class="kv" id="response"></dl>
+  </section>
+
+  <section class="panel">
+    <h2>Traffic</h2>
+    <p class="note">
+      Every request carries a monotonic id and only the freshest response is
+      applied — a drag fires many solves and they return out of order. A
+      burst is what the solver sees during a drag: one applied, the rest
+      dropped.
+    </p>
+    <p class="controls">
+      <button type="button" id="solve">Solve once</button>
+      <button type="button" id="burst">Burst of five</button>
+    </p>
+    <ul class="log" id="log"></ul>
+  </section>
+
   <section class="panel wide">
     <details>
       <summary id="body-summary">What would be posted</summary>
