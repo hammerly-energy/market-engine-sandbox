@@ -686,9 +686,9 @@ if __name__ == "__main__":
     for n, mw in feasible.items():
         gen_mw[at_bus[n]] += mw
     money = settle(lmp=lmp, load_mw={b: load.get(b, 0.0) for b in buses},
-                   gen_mw=gen_mw, mu=mu, limits=Fmax)
+                   gen_mw=gen_mw, mu=mu, flows=flow)
     payment, revenue = money["payments"], money["revenue"]
-    rent = money["mu_times_limit"]
+    rent = money["rent_from_duals"]
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out = root / "runs" / stamp

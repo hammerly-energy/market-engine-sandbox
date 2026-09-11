@@ -52,7 +52,7 @@ LMP[i] = lambda + sum_over_lines( PTDF[line, i] * mu[line] )  [+ loss term]
 ```
 
 - `lambda` = dual on system energy balance. Same at every bus. The energy component.
-- `mu[line]` = dual on that line's flow limit. Zero unless binding. Positive only when congested.
+- `mu[line]` = dual on that line's flow limit. Zero unless binding. Its sign carries which direction the line binds in — positive at the lower limit, negative at the upper — so never read it as a magnitude.
 - The sum is the congestion component.
 
 Sign convention depends on how the flow constraint was written. Verify against a case with a published answer rather than trusting the formula.
@@ -60,10 +60,34 @@ Sign convention depends on how the flow constraint was written. Verify against a
 **The settlement identity is the primary correctness test:**
 
 ```
-sum(load payments) - sum(generator revenue) == sum_over_lines( mu[line] * limit[line] )
+sum(load payments) - sum(generator revenue) == -sum_over_lines( mu[line] * f[line] )
 ```
 
 Must hold to floating-point tolerance. If it doesn't, the bug is in PTDF construction, a sign convention, or dual extraction. Run this check on every solve.
+
+**Write it with the flow, not the limit.** Most write-ups state the right-hand
+side as `sum( mu[line] * limit[line] )`, and this file did too until a line
+binding the other way proved it wrong. `mu` is `mu_up - mu_dn`, so its sign
+carries the direction a line binds in — `mu > 0` at the lower limit, `mu < 0`
+at the upper. Rent is money and is positive either way, so an expression that
+tracks the sign of `mu` is correct in one direction and inverted in the other.
+case5's DE binds at its lower limit, which is why the error survived M3 and M4.
+
+The flow form needs no case analysis because it is not a claim about binding
+lines at all. Substitute the LMP definition into `payments - revenue`, use
+`sum_i inj[i] = 0` and `f[l] = sum_i PTDF[l,i] * inj[i]`, and the `lambda`
+term vanishes with the injections:
+
+```
+payments - revenue = -sum_i LMP[i] * inj[i]
+                   = -lambda * 0 - sum_l mu[l] * f[l]
+```
+
+No complementary slackness, no assumption that a priced line sits at its
+rating. That assumption is still true and still tested — as its own statement,
+in `test_a_priced_line_sits_at_its_rating`, not folded into the rent. The
+limit never enters the arithmetic, which also removes the `inf * 0` hazard the
+old form had to guard.
 
 ## Repo layout
 
@@ -240,7 +264,7 @@ when the code runs.
 | **M2** ✓ | Real load data | Replace the synthetic shape with EIA-930 hourly demand, API v2. Establishes the ingest → `Scenario` boundary and the UTC discipline. | Row count asserted against hours requested; index is UTC with no gaps or duplicates; the scaling choice from system load to fleet capacity is written down and justified. | a weekend |
 | **M3** ✓ | DC network and congestion | PJM 5-bus example. Susceptance matrix, PTDF relative to a slack, line flow limits. `LMP[i] = λ + Σ PTDF[l,i]·μ[l]`. | Published PJM 5-bus LMPs reproduced exactly and committed as a regression test. Price *differences* invariant to slack choice. | 1 week |
 | **M4** ✓ | Hourly nodal clearing | The M3 network across a full day. case5's static hour becomes a 24-hour load shape on the same five buses, so `LMP[i,t]` is indexed by both. No new data source, no new topology — the cross product of M1's time index and M3's network, and nothing else. | Congestion appears in some hours and not others, and the settlement identity holds in **every** hour separately — a day-level sum would let a positive residual in one hour cancel a negative one in another. The 24-hour solve reproduces 24 independent single-hour network solves exactly, because nothing couples the hours yet. | an evening |
-| **M5** | Full DC OPF at scale | RTS-GMLC network, fleet, and profiles. 73 buses, 120 branches, a real thermal fleet priced off heat rate curves, and renewables entering as time-varying capacity. Real topology, one full day. | Settlement identity holds to floating-point tolerance on every hour: `Σ load payments − Σ gen revenue == Σ μ[l]·limit[l]` — now with **several lines binding at once**, which is the failure surface M4 cannot produce. LMPs land outside the fleet's offer range, and you can explain which binding rows put them there. | 2 weeks |
+| **M5** | Full DC OPF at scale | RTS-GMLC network, fleet, and profiles. 73 buses, 120 branches, a real thermal fleet priced off heat rate curves, and renewables entering as time-varying capacity. Real topology, one full day. | Settlement identity holds to floating-point tolerance on every hour: `Σ load payments − Σ gen revenue == −Σ μ[l]·f[l]` — now with **several lines binding at once**, in **both directions**, which is the failure surface M4 cannot produce. LMPs land outside the fleet's offer range, and you can explain which binding rows put them there. | 2 weeks |
 | **M6** | Unit commitment | Startup cost, min up/down time, min stable output. MILP for the binaries, then re-solve as an LP with binaries fixed. | The two-pass structure produces valid duals where the MILP alone cannot. No unit runs below its minimum. M1's separability test now *fails*, and you can explain exactly why. | 2 weeks |
 | **M7** | Storage and reserves | Energy and reserve co-optimization. Storage state of charge, charge/discharge, round-trip efficiency. | Reserve price appears as its own dual. Storage arbitrages the price spread without being told to. Energy and reserve prices are jointly consistent. | 2 weeks |
 | **M8** | Validation and write-up | Real fleet and real load. Compare against published LMPs pulled by `gridstatus` — the held-out answer key, touched here for the first time. | Structural agreement with published prices: price separation events, the evening ramp, negative hours. Every residual gap is explained as a market feature not yet modeled, not tuned away. | 2 weeks |

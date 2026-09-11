@@ -427,14 +427,14 @@ class TestClearingInvariants:
     def test_settlement_identity(self, limits):
         """The primary correctness test (CLAUDE.md).
 
-            sum(load payments) - sum(generator revenue) == sum_l mu[l]*limit[l]
+            sum(load payments) - sum(generator revenue) == -sum_l mu[l]*f[l]
 
         It is an identity, not a coincidence: it falls out of LP duality, so
         a failure means PTDF construction, a sign convention, or dual
         extraction is wrong -- never that the market "didn't settle".
 
         An unlimited line contributes nothing because its mu is exactly zero,
-        so inf * 0 has to be skipped rather than evaluated.
+        and it is multiplied by a finite flow, so there is no inf to guard.
         """
         s = _clear(limits)
         t = s["hour"]
@@ -444,8 +444,7 @@ class TestClearingInvariants:
         payments = sum(s["demand"][i][t] * lmp[i, t] for i in s["buses"])
         revenue = sum(mw * lmp[s["gen_bus"][g], t]
                       for (g, h), mw in s["res"]["p"].items() if h == t)
-        rent = sum(mu[l, t] * s["Fmax"][l]
-                   for l in s["lines"] if np.isfinite(s["Fmax"][l]))
+        rent = -sum(mu[l, t] * s["res"]["f"][l, t] for l in s["lines"])
 
         assert payments - revenue == pytest.approx(rent, abs=1e-6)
 
@@ -462,11 +461,11 @@ class TestClearingInvariants:
             load_mw={b: s["demand"][b][t] for b in s["buses"]},
             gen_mw=gen_mw,
             mu={l: mu[l, t] for l in s["lines"]},
-            limits=s["Fmax"],
+            flows={l: s["res"]["f"][l, t] for l in s["lines"]},
         )
         assert money["payments"] == pytest.approx(payments)
         assert money["revenue"] == pytest.approx(revenue)
-        assert money["mu_times_limit"] == pytest.approx(rent)
+        assert money["rent_from_duals"] == pytest.approx(rent)
         assert money["residual"] == pytest.approx(0.0, abs=1e-6)
 
     @pytest.mark.parametrize("limits", ["none", "config"])
@@ -951,6 +950,12 @@ class TestSettle:
     it is doing the arithmetic the identity names, on inputs with no LP behind
     them -- so a sign error cannot hide behind a case where both halves happen
     to be zero.
+
+    Rent is -sum(mu * f), so mu and the flow have to be given together and in
+    the same sign convention. mu > 0 is a line binding in its NEGATIVE
+    direction (mu_dn active, f = -limit); mu < 0 is the positive one. Both
+    appear below, because a formula that tracks the sign of mu would pass one
+    and fail the other.
     """
 
     def test_no_congestion_means_no_rent(self):
@@ -960,7 +965,7 @@ class TestSettle:
             load_mw={"A": 0.0, "B": 100.0},
             gen_mw={"A": 100.0, "B": 0.0},
             mu={"AB": 0.0},
-            limits={"AB": 400.0},
+            flows={"AB": 100.0},
         )
         assert money["payments"] == 3000.0
         assert money["revenue"] == 3000.0
@@ -971,37 +976,67 @@ class TestSettle:
         """Two buses, one binding line, every number hand-checkable.
 
         Load at B pays $40, generation at A collects $10, and the line carries
-        100 MW at its limit. The $30 gap on 100 MW is $3000, and mu on a
-        binding line is exactly that gap -- so both halves of the identity
-        come to 3000 by different routes.
+        100 MW. AB's positive direction is B->A, so power moving A->B shows as
+        f = -100 and the line binds against mu_dn, giving mu = +30.
+
+        The $30 gap on 100 MW is $3000, and mu on a binding line is exactly
+        that gap -- so both halves of the identity come to 3000 by different
+        routes.
         """
         money = settle(
             lmp={"A": 10.0, "B": 40.0},
             load_mw={"A": 0.0, "B": 100.0},
             gen_mw={"A": 100.0, "B": 0.0},
             mu={"AB": 30.0},
-            limits={"AB": 100.0},
+            flows={"AB": -100.0},
         )
         assert money["payments"] == 4000.0
         assert money["revenue"] == 1000.0
         assert money["congestion_rent"] == 3000.0
-        assert money["mu_times_limit"] == 3000.0
+        assert money["rent_from_duals"] == 3000.0
         assert money["residual"] == 0.0
 
-    def test_unlimited_line_is_skipped_not_multiplied(self):
-        """inf * 0 is nan, and one nan destroys the residual silently.
+    def test_rent_is_positive_whichever_way_the_line_binds(self):
+        """The mirror of the test above.
 
-        The guard is the reason this function takes limits at all rather than
-        being handed a rent total, so it is worth its own test.
+        Same $30 gap, same 100 MW on the line, but the line binds in its
+        positive direction: f = +100 and mu = -30. The money has not changed
+        -- load still pays $3000 more than generation collects -- and neither
+        has the rent.
+
+        This test and the one above cannot both pass while rent is computed as
+        mu * limit, because that expression tracks the sign of mu and rent
+        does not. Whichever direction is chosen, the other one inverts. It is
+        the reason settle() takes flows.
+        """
+        money = settle(
+            lmp={"A": 10.0, "B": 40.0},
+            load_mw={"A": 0.0, "B": 300.0},
+            gen_mw={"A": 100.0, "B": 200.0},
+            mu={"AB": -30.0},
+            flows={"AB": 100.0},
+        )
+        assert money["payments"] == 12000.0
+        assert money["revenue"] == 9000.0
+        assert money["congestion_rent"] == 3000.0
+        assert money["rent_from_duals"] == 3000.0
+        assert money["residual"] == 0.0
+
+    def test_an_unlimited_line_needs_no_guard(self):
+        """The inf * 0 hazard the limit form had, and this one does not.
+
+        An unlimited line still carries a flow and still has mu exactly zero,
+        so its term is 0 * 250 rather than 0 * inf. The rating never enters
+        the arithmetic, so there is nothing to skip and no nan to produce.
         """
         money = settle(
             lmp={"A": 30.0, "B": 30.0},
-            load_mw={"A": 0.0, "B": 100.0},
-            gen_mw={"A": 100.0, "B": 0.0},
+            load_mw={"A": 0.0, "B": 250.0},
+            gen_mw={"A": 250.0, "B": 0.0},
             mu={"AB": 0.0},
-            limits={"AB": np.inf},
+            flows={"AB": -250.0},
         )
-        assert money["mu_times_limit"] == 0.0
+        assert money["rent_from_duals"] == 0.0
         assert not np.isnan(money["residual"])
 
     def test_a_broken_price_shows_up_as_a_residual(self):
@@ -1016,7 +1051,7 @@ class TestSettle:
             load_mw={"A": 0.0, "B": 100.0},
             gen_mw={"A": 100.0, "B": 0.0},
             mu={"AB": 30.0},
-            limits={"AB": 100.0},
+            flows={"AB": -100.0},
         )
         assert money["residual"] == pytest.approx(500.0)
 
@@ -1032,8 +1067,163 @@ class TestSettle:
             load_mw={"A": 60.0},
             gen_mw={"A": 60.0},
             mu={},
-            limits={},
+            flows={},
         )
         assert money["payments"] == 1200.0
         assert money["revenue"] == 1200.0
         assert money["residual"] == 0.0
+
+    def test_mu_and_flows_must_name_the_same_lines(self):
+        """A line in one mapping and not the other is a caller mixing solves.
+
+        Iterating over mu alone would drop the extra line and report a
+        residual, which reads as a pricing bug and is not one.
+        """
+        with pytest.raises(ValueError, match="disagree on the lines"):
+            settle(
+                lmp={"A": 10.0, "B": 40.0},
+                load_mw={"A": 0.0, "B": 100.0},
+                gen_mw={"A": 100.0, "B": 0.0},
+                mu={"AB": 30.0, "BC": 0.0},
+                flows={"AB": -100.0},
+            )
+
+
+class TestBindingDirection:
+    """A line binds in one of two directions, and case5 only shows one.
+
+    case5's DE binds at its LOWER limit -- flow -240 on a 240 MW line -- and it
+    was for a long time the only binding line anywhere in this suite. Every
+    assertion about congestion rent therefore rested on one direction, which is
+    not a property of settlement but an accident of which case shipped first.
+
+        DE, case5                      the direction nothing tested
+        flow = -limit                  flow = +limit
+        mu_dn active, mu > 0           mu_up active, mu < 0
+
+    Rent is money and is positive either way, so any expression that tracks the
+    sign of mu -- mu * limit, as CLAUDE.md and most write-ups state it -- is
+    correct in one direction and inverted in the other. settle() uses
+    -sum(mu * f) instead, which needs no case analysis. This class is the case
+    that distinguishes them.
+    """
+
+    HOUR = "2024-01-01T00:00:00Z"
+
+    def _two_bus_upper_binding(self):
+        """Cheap generation at A, load at B, one line that binds carrying A->B.
+
+        Every number here is hand-checkable and none of it comes from an LP
+        until the solve:
+
+            a at A   $10   500 MW        line AB, limit 100 MW, A->B positive
+            b at B   $40   500 MW        load at B, 300 MW
+
+        The line can deliver 100 MW of the cheap unit and no more, so b covers
+        the remaining 200. Slack at A makes PTDF[AB, A] = 0 and
+        PTDF[AB, B] = -1, so the flow is +100: the UPPER limit.
+
+            LMP[A] = lambda + 0 * mu          = lambda = 10
+            LMP[B] = lambda + (-1) * mu       = 40   ->   mu = -30
+
+        Rent, from the money side: load pays 300 * 40 = 12000, generation
+        collects 100 * 10 + 200 * 40 = 9000. The gap is 3000, and it is
+        positive because it is money.
+        """
+        buses = ["A", "B"]
+        branches = [branch("AB", "A", "B", 0.1, limit=100.0)]
+        lines = ["AB"]
+        P = ptdf(buses, branches, "A")
+        Fmax = {"AB": 100.0}
+        gen_bus = {"a": "A", "b": "B"}
+        D = {"A": {self.HOUR: 0.0}, "B": {self.HOUR: 300.0}}
+        res = solve_dispatch_network_day(
+            c={"a": 10.0, "b": 40.0},
+            Pmax={"a": 500.0, "b": 500.0},
+            D=D,
+            gen_bus=gen_bus,
+            buses=buses,
+            PTDF=P,
+            Fmax=Fmax,
+        )
+        return {
+            "res": res, "buses": buses, "lines": lines, "PTDF": P,
+            "Fmax": Fmax, "gen_bus": gen_bus, "demand": D,
+        }
+
+    def _settle(self, s):
+        t = self.HOUR
+        mu = congestion_prices(s["res"])
+        lmp = lmps(s["res"], s["buses"], s["lines"], s["PTDF"])
+        gen_mw = {b: 0.0 for b in s["buses"]}
+        for g, bus in s["gen_bus"].items():
+            gen_mw[bus] += s["res"]["p"][g, t]
+        return settle(
+            lmp={b: lmp[b, t] for b in s["buses"]},
+            load_mw={b: s["demand"][b][t] for b in s["buses"]},
+            gen_mw=gen_mw,
+            mu={l: mu[l, t] for l in s["lines"]},
+            flows={l: s["res"]["f"][l, t] for l in s["lines"]},
+        )
+
+    def test_the_case_really_does_bind_upward(self):
+        """Guard on the fixture itself, not on settlement.
+
+        If this fails, the case stopped exercising the direction it was built
+        for and the tests below are no longer testing anything -- so it runs
+        first and says so in its own terms.
+        """
+        s = self._two_bus_upper_binding()
+        t = self.HOUR
+        mu = congestion_prices(s["res"])
+        assert s["res"]["f"]["AB", t] == pytest.approx(+100.0), "line is not at its upper limit"
+        assert mu["AB", t] < 0, "upper-binding line should carry mu < 0"
+
+    def test_prices_are_the_hand_computed_ones(self):
+        """LMPs first, so a settlement failure cannot be blamed on pricing."""
+        s = self._two_bus_upper_binding()
+        t = self.HOUR
+        lmp = lmps(s["res"], s["buses"], s["lines"], s["PTDF"])
+        assert lmp["A", t] == pytest.approx(10.0)
+        assert lmp["B", t] == pytest.approx(40.0)
+        assert s["res"]["p"]["a", t] == pytest.approx(100.0)
+        assert s["res"]["p"]["b", t] == pytest.approx(200.0)
+
+    def test_settlement_identity_holds_when_the_line_binds_upward(self):
+        """The same identity, in the direction case5 cannot produce.
+
+        Money side: 12000 - 9000 = 3000.
+        Dual side:  -(-30 * 100) = 3000.
+
+        Written as mu * limit the dual side would be -3000 and the residual
+        6000, on a case where nothing about the prices is wrong.
+        """
+        money = self._settle(self._two_bus_upper_binding())
+        assert money["payments"] == pytest.approx(12000.0)
+        assert money["revenue"] == pytest.approx(9000.0)
+        assert money["congestion_rent"] == pytest.approx(3000.0)
+        # Rent is money. It does not change sign with the flow direction.
+        assert money["rent_from_duals"] == pytest.approx(3000.0)
+        assert money["residual"] == pytest.approx(0.0, abs=1e-6)
+
+    def test_a_priced_line_sits_at_its_rating(self):
+        """Complementary slackness, stated on its own.
+
+        This used to ride along inside the rent formula: mu * limit is only
+        correct because a non-zero dual implies the line is at its limit. The
+        flow form does not need that to be true, so the claim is made here
+        instead -- where a failure names complementary slackness rather than
+        appearing as a settlement residual.
+
+        It also keeps the rating in the test suite. -sum(mu * f) reads only
+        solver outputs; this is the one assertion that checks them against the
+        limit the model was given.
+        """
+        s = self._two_bus_upper_binding()
+        t = self.HOUR
+        mu = congestion_prices(s["res"])
+        for l in s["lines"]:
+            if abs(mu[l, t]) > 1e-9:
+                assert abs(s["res"]["f"][l, t]) == pytest.approx(s["Fmax"][l], abs=1e-6), (
+                    f"{l} is priced at mu={mu[l, t]} but is not at its rating"
+                )

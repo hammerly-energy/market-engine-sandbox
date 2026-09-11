@@ -110,7 +110,7 @@ def clear(scenario, slack=None, limits=None):
             load_mw={b: D[b][t] for b in buses},
             gen_mw=gen_mw,
             mu={l: mu[l, t] for l in lines},
-            limits=Fmax,
+            flows={l: res["f"][l, t] for l in lines},
         )
 
     return {
