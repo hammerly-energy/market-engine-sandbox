@@ -8,6 +8,13 @@ An electricity market clearing engine, built from scratch. It answers: given gen
 
 Scope: nodal energy market, DC approximation, 24-hour day-ahead solve. No AC power flow, no reactive power, no financial transmission rights.
 
+The repo has two halves. The **engine** (M0-M4, done) is the formulation,
+built by hand. The **web build** (W0-W4, next) puts that engine behind a
+browser so a visitor can rewire the network and watch prices move. The engine
+does not change to suit the web build; the web build is a caller, and a caller
+that finds the engine too brittle to survive arbitrary input is reporting a
+real defect in the engine, not asking for a special case.
+
 ## Purpose (read this before "helping")
 
 This is a learning project. The author is a mechanical engineer transitioning into power markets. The point is to build the formulations by hand and understand where prices come from.
@@ -18,6 +25,27 @@ Therefore:
 - **Do not hand over a finished module** when the author is on a milestone they haven't attempted. Explain the formulation, then let them write it.
 - Do write scaffolding, data ingestion, tests, and plotting code — that's not the part worth learning by hand.
 - When explaining a new concept, include a diagram or visual, not just prose.
+
+**The web build is not subject to the hand-build rule.** HTTP handlers, the
+frontend, the editor, the charts, and the deploy are scaffolding: write them
+outright. The line falls where power-systems reasoning starts.
+
+Detecting an island is already done (`topology.py:59`) and is not the
+interesting part. The formulation questions the author has to answer are the
+ones with more than one defensible answer:
+
+- **What does an island mean?** Today `ptdf.py:48` refuses to price a
+  disconnected network at all. A real ISO would price each island separately,
+  with its own λ. Refusing is a choice, and it is the wrong one the moment a
+  visitor's first act is to cut a line.
+- **What does the engine say when load cannot be served?** Refuse, or admit a
+  scarcity price and let λ rise to it. Both are real market designs.
+- **What happens when the slack is deleted?** Any bus works and prices do not
+  depend on it, so picking one silently is defensible — and silently changing
+  a thing the UI displays is not.
+
+Explain those and let the author write them. Anything that would be the same
+code in a to-do app, just write.
 
 ## How to talk to me
 
@@ -114,7 +142,12 @@ market-engine-sandbox/
 │   │   └── pricing.py
 │   ├── settle/settlement.py
 │   ├── validate/compare.py
-│   └── viz/
+│   ├── api/                 FastAPI over clear(). transport only, no maths
+│   └── viz/                 matplotlib, publication figures
+├── web/                     the browser build. no toolchain, no build step
+│   ├── index.html
+│   ├── js/                  editor state, fetch, the seven views
+│   └── css/
 ├── configs/                 yaml, one file per scenario, fully declarative
 ├── runs/                    one dir per solve, config snapshot copied in
 ├── tests/                   test_<milestone>_<context>.py
@@ -230,6 +263,134 @@ Plotting code lives in `src/viz/` and is importable: a function returns a
 `Figure`, and only `__main__` writes files. Never bury a `savefig` inside model
 or ingest code.
 
+## The web build
+
+### Why there is a server at all
+
+The engine is Pyomo calling HiGHS. Neither runs in a browser, and there is no
+scipy in this venv to fall back to. That settles it: **Python solves, the
+browser draws.**
+
+A precomputed sweep shipped as static JSON was the alternative and it is dead
+on arrival, because the levers include adding a bus and connecting a line.
+You cannot precompute a sweep over topologies that do not exist yet. The
+moment the editor can change the network, the solve has to be live.
+
+```
+  browser                         server
+  ───────                         ──────
+  editor state                    src/api/        (W0, a transport)
+  {buses, branches,   ──POST──>   scenario_from_config()
+   fleet, load,                   clear(scenario, slack=, limits=)
+   slack, hour}                        |
+                                  src/model/      (M0-M4, unchanged)
+                                       |
+  seven views       <──JSON───     {dispatch, flows, mu, lmp,
+  formatted only                    lmbda, settlement, PTDF}
+```
+
+### The boundary rule
+
+**No market arithmetic in JavaScript.** The browser formats numbers, picks
+colours, and positions marks. It does not add λ to a congestion component, it
+does not multiply μ by a flow, and it does not compute a residual. Every
+number on screen is a field of the `clear()` return or a direct formatting of
+one.
+
+This is the same rule as *"the model layer must not know where data came
+from"*, pointed the other way. It exists because a second implementation of
+the LMP assembly — in a second language, untested — would be a new place for
+a sign convention to be wrong, and the whole repo is organised around having
+exactly one such place. If a view needs a number the engine does not return,
+the engine returns it. `clear()` grows; the frontend does not.
+
+Corollary: the settlement residual is **displayed, not hidden**. It is the
+repo's central claim. A site that computes prices and quietly drops the proof
+they are consistent is doing the thing this repo exists to not do.
+
+### Scope honesty
+
+The site must not imply M5-M8 exist. No unit commitment, no storage, no
+reserves, no comparison against published prices. The fleet is five synthetic
+generators on a five-bus teaching case and the offers are cost-based.
+
+State that on the page, in the reader's path, not in a footer. The honest
+version is more impressive than the inflated one: a visitor who works in
+markets will spot a missing UC in thirty seconds, and the difference between
+"knows what is missing" and "does not" is the entire signal.
+
+### Interactive figure register
+
+The publication rules above still govern anything exported as a file. On
+screen, they hold with three amendments:
+
+- **Identifiers, capitalisation and units are unchanged.** `g1`, `λ`, `MW`,
+  `$/MWh`, sentence case, units on the axis label once. A web figure is not
+  licensed to be sloppier than a printed one.
+- **Hover may carry precision the figure does not.** A tooltip is allowed to
+  give four decimals where the mark is rounded. It may not carry an argument
+  or a sentence the figure needed to make itself.
+- **Motion is for continuity, not for decoration.** When a lever moves, marks
+  transition so the eye can follow which bus went where. Nothing pulses,
+  bounces, or animates on load. A price that changes instantly is a price the
+  reader cannot track to its new value.
+
+Colour is assigned by identity in a fixed order and shared between the static
+figures and the web views, so a bus is the same hue in the PDF and on screen.
+
+### What the engine already refuses
+
+Measured against the M3 case5 scenario, not assumed. This table exists so W1
+does not spend a day rediscovering it, and so a new failure found later can
+be checked against a list of what was already true.
+
+| A visitor does this | What happens now | Verdict |
+|---|---|---|
+| Cuts a line, islanding a bus | `ValueError: network is disconnected: ['E'] cannot reach slack 'D'` | Clean, named, displayable |
+| Names a slack that is not a bus | `ValueError: slack 'Z' is not a bus in [...]` | Clean |
+| Adds a branch with zero reactance | `ValueError: reactance_pu must be > 0` at `Branch.__post_init__` | Clean, caught at construction |
+| Duplicates a bus or branch name | `ValueError` at `Scenario.__post_init__` | Clean |
+| Adds a bus with no generator and no load | Prices correctly. The bus gets a real LMP | **Not a bug.** Do not "fix" |
+| Adds a second line between two buses | Solves correctly | **Not a bug.** Parallel lines are physical |
+| Sets capacity below load | `RuntimeError: solve not optimal: infeasible` from `dispatch.py:235` | **The one real gap.** W1 |
+| Sets all load to zero | Solves, `λ = -0.0` | Degenerate, not broken. Trap 3 |
+
+The pattern: **topology was hardened at M3 and economics was not.** The
+network guards were written when PTDF was written, because a singular matrix
+is loud. An infeasible LP is quiet — it returns a status, and the status was
+only ever read by a developer.
+
+### Degeneracy under a moving slider
+
+Dragging a line limit walks the LP through thresholds where it is degenerate,
+and there the price genuinely flickers between equally valid values on inputs
+a pixel apart. Trap 3. **Do not smooth it, debounce it away, or average it.**
+
+Show it. A price that is not unique is the single most honest thing this site
+can demonstrate, and it is invisible in every commercial tool a visitor has
+seen. The engine already has the right instinct — M0 asserts *bounds* at
+degenerate breakpoints rather than values — so the view should say `λ ∈ [20,
+35]` where the repo's own tests would.
+
+That requires the engine to know it is degenerate, which it currently does
+not. Either detect it and return a flag, or accept that the site shows one
+arbitrary member of the set without comment. The first is better and is not
+free; decide before W3, not during.
+
+### Frontend stack
+
+Default: **no build step.** Plain ES modules, hand-written SVG, D3 for scales
+and path generators only. The reason is lifespan — a portfolio piece is
+judged years after it is written, and a toolchain that has rotted is worse
+than no site.
+
+Be honest about what this costs: W2 *is* drag interaction — placing buses,
+pulling lines between them, hit-testing, undo. Hand-writing that in SVG is
+the most likely place this plan overruns, which is why W2 is sized at a week
+and a half rather than a week. If it starts to quagmire, adopting a framework
+for the editor alone is the correct retreat, and it is a retreat worth making
+early rather than at day nine.
+
 ## Data sources
 
 | Input | Source |
@@ -264,10 +425,33 @@ when the code runs.
 | **M2** ✓ | Real load data | Replace the synthetic shape with EIA-930 hourly demand, API v2. Establishes the ingest → `Scenario` boundary and the UTC discipline. | Row count asserted against hours requested; index is UTC with no gaps or duplicates; the scaling choice from system load to fleet capacity is written down and justified. | a weekend |
 | **M3** ✓ | DC network and congestion | PJM 5-bus example. Susceptance matrix, PTDF relative to a slack, line flow limits. `LMP[i] = λ + Σ PTDF[l,i]·μ[l]`. | Published PJM 5-bus LMPs reproduced exactly and committed as a regression test. Price *differences* invariant to slack choice. | 1 week |
 | **M4** ✓ | Hourly nodal clearing | The M3 network across a full day. case5's static hour becomes a 24-hour load shape on the same five buses, so `LMP[i,t]` is indexed by both. No new data source, no new topology — the cross product of M1's time index and M3's network, and nothing else. | Congestion appears in some hours and not others, and the settlement identity holds in **every** hour separately — a day-level sum would let a positive residual in one hour cancel a negative one in another. The 24-hour solve reproduces 24 independent single-hour network solves exactly, because nothing couples the hours yet. | an evening |
-| **M5** | Full DC OPF at scale | RTS-GMLC network, fleet, and profiles. 73 buses, 120 branches, a real thermal fleet priced off heat rate curves, and renewables entering as time-varying capacity. Real topology, one full day. | Settlement identity holds to floating-point tolerance on every hour: `Σ load payments − Σ gen revenue == −Σ μ[l]·f[l]` — now with **several lines binding at once**, in **both directions**, which is the failure surface M4 cannot produce. LMPs land outside the fleet's offer range, and you can explain which binding rows put them there. | 2 weeks |
-| **M6** | Unit commitment | Startup cost, min up/down time, min stable output. MILP for the binaries, then re-solve as an LP with binaries fixed. | The two-pass structure produces valid duals where the MILP alone cannot. No unit runs below its minimum. M1's separability test now *fails*, and you can explain exactly why. | 2 weeks |
-| **M7** | Storage and reserves | Energy and reserve co-optimization. Storage state of charge, charge/discharge, round-trip efficiency. | Reserve price appears as its own dual. Storage arbitrages the price spread without being told to. Energy and reserve prices are jointly consistent. | 2 weeks |
-| **M8** | Validation and write-up | Real fleet and real load. Compare against published LMPs pulled by `gridstatus` — the held-out answer key, touched here for the first time. | Structural agreement with published prices: price separation events, the evening ramp, negative hours. Every residual gap is explained as a market feature not yet modeled, not tuned away. | 2 weeks |
+| **M5** | *Not pursued.* | Full DC OPF at scale — RTS-GMLC, 73 buses, 120 branches. | — | — |
+| **M6** | *Not pursued.* | Unit commitment. Startup cost, min up/down, min stable output. | — | — |
+| **M7** | *Not pursued.* | Storage and reserves, co-optimized. | — | — |
+| **M8** | *Not pursued.* | Validation against published LMPs via `gridstatus`. | — | — |
+
+M5-M8 are **deliberately not being built in this repo.** The rows stay because
+the reasoning in them is still correct and because the web build must not
+imply they exist. Anything the site says about unit commitment, storage,
+reserves, or validation against real prices is a claim about code that is not
+here. See *Scope honesty* below.
+
+The two-pass UC structure documented under **Core mechanics** is likewise
+description, not implementation. It stays because it explains why the engine
+is an LP and where prices come from; it is not a thing this repo does.
+
+### Web milestones
+
+Same discipline: one new failure surface each, done when the **Goal** column
+is demonstrably true.
+
+| | Milestone | Description | Goal — done when this is true | Est. |
+|---|---|---|---|---|
+| **W0** | Serve one solve | FastAPI in `src/api/`, wrapping `clear()`. One `POST /clear` taking a scenario config as JSON. Two things that are not transport and must land here: a **wire format** — `clear()` keys dispatch, flows, μ and lmp by `(name, hour)` tuples, which JSON cannot express — and **input bounds**, because a public URL means a hostile POST body and a live HiGHS solve behind one is a resource-exhaustion vector. Cap buses, branches, generators, hours and body size; reject, don't truncate. | The published case5 LMPs come back over HTTP and match the in-process `clear()` result field for field, asserted as a test. The API adds no arithmetic. An oversized or malformed body returns a named 4xx, never a traceback and never a solve. | 1 day |
+| **W1** | Make the engine total | Less is missing here than it looks. Measured, not assumed: islanding, an isolated bus, a mistyped slack, a zero-reactance branch and duplicate names **already** raise clean named `ValueError`s — `ptdf.py:48` and `topology.py:59` were built for exactly this. A connected bus with no generator and no load prices correctly. Parallel branches solve correctly. The one real gap is **infeasibility**: too little capacity for the load returns a bare `RuntimeError: solve not optimal: infeasible` from `dispatch.py:235`, which is not a sentence anyone can show a visitor. | **Every input the editor can produce returns either a priced solve or one named, displayable reason.** The fuzz test over random topologies is the deliverable, not the `RuntimeError` fix — the fix is an hour and the fuzz test is what proves *What the engine already refuses* is complete rather than merely the cases someone thought of. The harder half is the three formulation questions under **Purpose**: what an island means, what the engine says when load cannot be served, and what happens when the slack is deleted. Each has more than one defensible answer. Pick one each and write down why — a refusal chosen deliberately is a design; a refusal inherited from `ptdf.py` is an accident. | 1.5 days |
+| **W2** | The editor | The eight levers, against the live engine: line limit, peak load per bus, add/remove bus, connect/disconnect line, add/remove generator, edit generator capacity and marginal cost, hour 1–24, slack bus. | Every lever re-solves and redraws. The slack dropdown is the acceptance test, **on a fixture with a unique optimum**: moving it must rearrange the λ/congestion split while every LMP and every settlement figure stays bit-identical. A UI that shows prices moving with the slack has a bug in it. Run that assertion on a degenerate fixture and it will flake, correctly — see trap 2. | 1.5 weeks |
+| **W3** | The views | Network map with buses coloured by LMP; LMP split into λ + congestion; merit-order stack; settlement ledger with the residual; line flows against limits; live generation by unit; 24-hour heatmap. Three of these need fields `clear()` does not yet return — **add them in W0, not mid-W3**: a per-bus `congestion[bus, hour]`, which `pricing.py` already computes and then discards; per-generator `cost` and `pmax`, without which no merit-order stack can be drawn; and the marginal unit. Bus *coordinates* are not an engine concern at all — they are editor state, and they belong to W2. | Every number on screen is traceable to a field of the `clear()` return. Nothing is recomputed in JavaScript — the browser formats and draws, it does not do market arithmetic. The residual is displayed, not hidden, because a visible `≈ 0` is the claim the whole repo rests on. | 1 week |
+| **W4** | The frame and the deploy | Narrative scroll, one section per engine milestone, each with its live figure and a link to the source that implements it. Equations rendered next to the code. Scope statement. Deployed. | A stranger can reach it at a URL, rewire the network, and leave understanding that λ is a dual variable. The scope statement is on the page, not in a footer. | 3 days |
 
 Do not skip to a later milestone. Each one's test suite is the foundation for the
 next, and the invariants established early are what catch the subtle failures
@@ -276,7 +460,59 @@ later.
 ## Known traps
 
 1. **Time zones.** EIA-930 is UTC. ERCOT market time is Central Prevailing Time with DST — one 23-hour and one 25-hour day per year, including a duplicated hour. CAISO is Pacific Prevailing. Assert 8760 or 8784 rows in a year.
-2. **PTDF slack bus.** PTDF is defined relative to a slack. Changing the slack shifts all prices by a constant. Price *differences* are invariant; that's what matters.
+2. **PTDF slack bus.** PTDF is defined relative to a slack, and it is an
+   accounting origin, not a modelling assumption. `PTDF[l, slack] = 0` by
+   construction, so congestion at the slack is zero, so **λ is the LMP at the
+   slack bus** — that is the whole content of the choice.
+
+   Changing it moves λ and moves every PTDF column, and the two changes
+   cancel exactly. Measured on case5, slack D → A → E:
+
+   ```
+   slack   λ         LMP:  A       B       C       D       E
+   ──────────────────────────────────────────────────────────
+     D    39.9427         16.9774 26.3845 30.0000 39.9427 10.0000
+     A    16.9774         16.9774 26.3845 30.0000 39.9427 10.0000
+     E    10.0000         16.9774 26.3845 30.0000 39.9427 10.0000
+   ```
+
+   λ moves $30. **No LMP moves at all**, and no payment, revenue or rent
+   moves either. Earlier wording here said prices "shift by a constant"; the
+   constant is zero, and saying it the loose way invites a UI that animates
+   prices sliding when the slack changes. They do not slide.
+
+   The mechanism: `f = PTDF·inj` and `Σ inj = 0`, so the reference term
+   `PTDF[l, s']·Σ inj` vanishes. Different matrix, identical feasible set,
+   identical dispatch and identical μ. The two matrices agree only *on* the
+   balance hyperplane, so the Lagrangian splits the same total price
+   differently between the balance row and the flow rows — λ absorbs the
+   difference, and the sum is physics.
+
+   Consequence for testing: a slack bug is **invisible in settlement**. Every
+   bill is right whichever slack is wrong. It shows only if λ and the
+   congestion component are asserted separately.
+
+   **The precondition is a unique optimum, and it is not decorative.** What is
+   slack-invariant is the *set* of optimal prices, because the shift identity
+   maps each optimal dual under one slack onto an equal-LMP dual under
+   another. Which member of that set the solver hands back is not guaranteed.
+   Change the PTDF matrix and the simplex pivots differently, so under
+   degeneracy it can land on a different vertex. Measured, case5 with every
+   offer set to $25 and both limits removed:
+
+   ```
+   slack   alta  park_city  solitude  sundance  brighton
+   ───────────────────────────────────────────────────────
+     A       0        0        520       200      280
+     C      40      170          0       200      590
+   ```
+
+   Same LP, same feasible set, different answer. LMPs held at $25 there only
+   because nothing was congested and every μ was zero — with a binding line,
+   the prices could have moved too. So: **slack choice is accounting. LP
+   degeneracy is what moves the answer, and it moves it whatever the slack
+   is.** That is trap 3, not this trap, and conflating them will send you
+   hunting a PTDF sign error that is not there.
 3. **LP degeneracy.** When multiple optimal bases exist, duals are arbitrary and prices flip between values on near-identical inputs. Not a bug.
 4. **Min output without binaries.** A pure LP will run a 600 MW coal unit at 4 MW. Physically impossible. This is why UC exists.
 5. **ERCOT has no loss component in its LMPs** — losses are socialized to load. A model with a loss term will not match ERCOT prices.
