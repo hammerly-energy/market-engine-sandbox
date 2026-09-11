@@ -347,7 +347,8 @@ be checked against a list of what was already true.
 | A visitor does this | What happens now | Verdict |
 |---|---|---|
 | Cuts a line, islanding a bus | ~~`ValueError: network is disconnected`~~ → prices each island separately, one λ each | **Was** clean, named and displayable. It was also the wrong answer — see below |
-| Names a slack that is not a bus | `ValueError: slack 'Z' is not a bus in [...]` | Clean |
+| Names a slack that is not a bus | `ValueError: slack 'Z' is not a bus in [...]` | Clean, and kept — `slack=` is an assertion by the caller |
+| Deletes the bus the *config* names as slack | Falls back to the first bus, and reports it | New at W1 — see below |
 | Adds a branch with zero reactance | `ValueError: reactance_pu must be > 0` at `Branch.__post_init__` | Clean, caught at construction |
 | Duplicates a bus or branch name | `ValueError` at `Scenario.__post_init__` | Clean |
 | Adds a bus with no generator and no load | Prices correctly. The bus gets a real LMP | **Not a bug.** Do not "fix" |
@@ -486,8 +487,56 @@ Settlement is now per island **and** per hour. Summing the islands would let
 a positive residual in one cancel a negative one in the other — the per-hour
 mistake, one dimension over.
 
-The last W1 question — what happens when the slack is deleted — is still
-open.
+### W1 decision: what happens when the slack is deleted
+
+**Chosen when it came from the config, refused when the caller named it.**
+Those are two different claims and they deserve two different answers:
+
+| | | |
+|---|---|---|
+| `clear(scenario, slack="Z")` | **raises** | An assertion by this caller about this call. A typo that silently answered about a different bus is how a sweep reports a day of the wrong λ and nobody notices |
+| `provenance["slack"]` names a deleted bus | **falls back to `buses[0]`** | A *record*, written at parse time and stale by the time the editor deleted that bus |
+
+The editor holds the slack in its own state, so deleting a bus leaves the
+config naming one that is gone. Refusing there would make deleting the slack
+the one edit that breaks the site — and it would refuse for no physical
+reason: the slack is an accounting origin (trap 2), any bus works, and no LMP,
+dispatch, flow or settlement figure depends on which. Only the **level of λ**
+moves, because λ is the LMP at the slack.
+
+**Consequence for W2, decided: the editor keeps posting an explicit `slack`
+and updates its own state when that bus goes.** It holds the bus list, so
+deleting a bus and leaving the dropdown pointing at it is a client bug, and
+the 422 is the engine telling it so. Dropping the field and relying on the
+config's recorded slack was the alternative and is not taken — it would trade
+the typo check away to paper over a bug the editor is in the best position to
+prevent.
+
+Which leaves the fallback as a safety net the editor should never trigger. It
+still earns its place: a sweep, a notebook, or a hand-edited config can all
+carry a recorded slack that no longer exists, and none of them has a dropdown
+to keep in step.
+
+**Silent in the sense that it does not raise. Not silent in the sense of
+unreported.** The chosen slack comes back under `slack` and names its island
+in `islands` and `lmbda`, so a caller that asked for a bus which is gone can
+see which one it actually got. Same rule `island_slacks()` follows, and it is
+the whole reason this is a fallback rather than a secret.
+
+Three properties, all tested:
+
+- **Reproducible.** First bus in config order, derivable without running
+  anything.
+- **It fires only when the named slack is actually gone.** Deleting an
+  unrelated bus does not move it — a slack that wandered would make λ jump on
+  screen for no reason a reader could see.
+- **No price moves.** Every LMP is bit-identical across the fallback; only λ
+  and the congestion split change, and they cancel exactly.
+
+All three W1 formulation questions are now answered. What remains of W1 is the
+fuzz test over random topologies — the deliverable that proves *What the
+engine already refuses* is complete rather than merely the cases someone
+thought of.
 
 ### Degeneracy under a moving slider
 
@@ -581,7 +630,7 @@ is demonstrably true.
 |---|---|---|---|---|
 | **W0** | Serve one solve | FastAPI in `src/api/`, wrapping `clear()`. One `POST /clear` taking a scenario config as JSON. Two things that are not transport and must land here: a **wire format** — `clear()` keys dispatch, flows, μ and lmp by `(name, hour)` tuples, which JSON cannot express — and **input bounds**, because a public URL means a hostile POST body and a live HiGHS solve behind one is a resource-exhaustion vector. Cap buses, branches, generators, hours and body size; reject, don't truncate. | The published case5 LMPs come back over HTTP and match the in-process `clear()` result field for field, asserted as a test. The API adds no arithmetic. An oversized or malformed body returns a named 4xx, never a traceback and never a solve. | 1 day |
 | **W1** | Make the engine total | Less is missing here than it looks. Measured, not assumed: islanding, an isolated bus, a mistyped slack, a zero-reactance branch and duplicate names **already** raise clean named `ValueError`s — `ptdf.py:48` and `topology.py:59` were built for exactly this. A connected bus with no generator and no load prices correctly. Parallel branches solve correctly. The one real gap is **infeasibility**: too little capacity for the load returns a bare `RuntimeError: solve not optimal: infeasible` from `dispatch.py:235`, which is not a sentence anyone can show a visitor. | **Every input the editor can produce returns either a priced solve or one named, displayable reason.** The fuzz test over random topologies is the deliverable, not the `RuntimeError` fix — the fix is an hour and the fuzz test is what proves *What the engine already refuses* is complete rather than merely the cases someone thought of. The harder half is the three formulation questions under **Purpose**: what an island means, what the engine says when load cannot be served, and what happens when the slack is deleted. Each has more than one defensible answer. Pick one each and write down why — a refusal chosen deliberately is a design; a refusal inherited from `ptdf.py` is an accident. | 1.5 days |
-| **W2** | The editor | The eight levers, against the live engine: line limit, peak load per bus, add/remove bus, connect/disconnect line, add/remove generator, edit generator capacity and marginal cost, hour 1–24, slack bus. | Every lever re-solves and redraws. The slack dropdown is the acceptance test, **on a fixture with a unique optimum**: moving it must rearrange the λ/congestion split while every LMP and every settlement figure stays bit-identical. A UI that shows prices moving with the slack has a bug in it. Run that assertion on a degenerate fixture and it will flake, correctly — see trap 2. | 1.5 weeks |
+| **W2** | The editor | The eight levers, against the live engine: line limit, peak load per bus, add/remove bus, connect/disconnect line, add/remove generator, edit generator capacity and marginal cost, hour 1–24, slack bus. | Every lever re-solves and redraws. **Deleting the slack bus moves the dropdown, it does not 422** — the editor posts an explicit `slack` and owns keeping it in step with the bus list, and the engine refusing a slack that is not a bus is the check that catches it failing to. The slack dropdown is the acceptance test, **on a fixture with a unique optimum**: moving it must rearrange the λ/congestion split while every LMP and every settlement figure stays bit-identical. A UI that shows prices moving with the slack has a bug in it. Run that assertion on a degenerate fixture and it will flake, correctly — see trap 2. | 1.5 weeks |
 | **W3** | The views | Network map with buses coloured by LMP; LMP split into λ + congestion; merit-order stack; settlement ledger with the residual; line flows against limits; live generation by unit; 24-hour heatmap. Three of these need fields `clear()` does not yet return — **add them in W0, not mid-W3**: a per-bus `congestion[bus, hour]`, which `pricing.py` already computes and then discards; per-generator `cost` and `pmax`, without which no merit-order stack can be drawn; and per-generator **status** (`off` / `interior` / `at_max`) with its `headroom` and `reduced_cost`. Status, *not* "the marginal unit" — that field was written at W0 and replaced within the hour, because under congestion there is no single marginal unit and three of case5's five buses have an LMP equal to no offer at all. Bus *coordinates* are not an engine concern at all — they are editor state, and they belong to W2. | Every number on screen is traceable to a field of the `clear()` return. Nothing is recomputed in JavaScript — the browser formats and draws, it does not do market arithmetic. The residual is displayed, not hidden, because a visible `≈ 0` is the claim the whole repo rests on. | 1 week |
 | **W4** | The frame and the deploy | Narrative scroll, one section per engine milestone, each with its live figure and a link to the source that implements it. Equations rendered next to the code. Scope statement. Deployed. | A stranger can reach it at a URL, rewire the network, and leave understanding that λ is a dual variable. The scope statement is on the page, not in a footer. | 3 days |
 

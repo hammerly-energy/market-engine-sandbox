@@ -371,6 +371,9 @@ class TestRejects:
         assert fragment in body["detail"]
 
     def test_a_slack_that_is_not_a_bus(self, client, m4_config):
+        """The body's slack field is an explicit argument, so a bus that is
+        not there is the caller's error. A STALE slack recorded in the config
+        falls back instead -- see tests/test_w1_islands.py."""
         body = self.assert_named(
             client.post("/clear", json={"config": m4_config, "slack": "Z"}),
             "invalid_scenario",

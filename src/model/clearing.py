@@ -77,12 +77,39 @@ def clear(scenario, slack=None, limits=None):
             f"{len(buses)} bus(es) and {len(branches)} branch(es)"
         )
 
-    if slack is None:
+    # A slack that is no longer a bus is CHOSEN when it came from the config
+    # and REFUSED when the caller named it. The two are different claims:
+    #
+    #     slack=          an assertion by this caller, about this call. If it
+    #                     names a bus that is not there, the caller is wrong
+    #                     and should hear about it. A typo silently answering
+    #                     about a different bus is how a sweep reports 24
+    #                     hours of the wrong lambda and nobody notices.
+    #
+    #     provenance      a RECORD, written when the config was parsed and
+    #                     possibly stale by now. The editor deletes a bus and
+    #                     the recorded slack names something gone. Refusing
+    #                     there would make deleting the slack the one edit
+    #                     that breaks the site -- and it would refuse for no
+    #                     physical reason, because the slack is an accounting
+    #                     origin (trap 2). Any bus works, no LMP, dispatch,
+    #                     flow or settlement figure depends on which, and only
+    #                     the LEVEL of lambda moves.
+    #
+    # The fallback is the first bus in the caller's order, so the same config
+    # gives the same answer twice and the choice is derivable without running
+    # anything. It does not raise; it is not unreported. The chosen slack is
+    # returned under "slack" and names its island in "islands" and "lmbda", so
+    # a caller whose recorded slack is gone can see which one it got. A number
+    # the UI displays may not be picked privately -- the same rule
+    # island_slacks follows.
+    if slack is not None:
+        if slack not in buses:
+            raise ValueError(f"slack {slack!r} is not a bus in {buses}")
+    else:
         slack = scenario.provenance.get("slack")
-    if slack is None:
-        raise ValueError("no slack bus: pass slack= or record network.slack")
-    if slack not in buses:
-        raise ValueError(f"slack {slack!r} is not a bus in {buses}")
+        if slack not in buses:
+            slack = buses[0]
 
     lines = [br.name for br in branches]
     # Row order is branches, column order is buses, and both are fixed HERE and

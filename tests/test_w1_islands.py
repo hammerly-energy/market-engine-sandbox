@@ -213,6 +213,116 @@ class TestTwoMarkets:
         assert -1e-6 <= lam <= 10.0 + 1e-6
 
 
+# ------------------------------------------------------- the deleted slack
+
+
+class TestDeletedSlack:
+    """W1's third question: what happens when the slack bus is deleted.
+
+    CHOSEN, not refused. The editor holds the slack in its own state, so
+    deleting a bus leaves it naming one that is gone -- and refusing there
+    would make deleting the slack the one edit that breaks the site. It would
+    also refuse for no physical reason: the slack is an accounting origin
+    (trap 2), any bus works, and no LMP, dispatch, flow or settlement figure
+    depends on which one. Only the LEVEL of lambda moves, because lambda is
+    the LMP at the slack.
+
+    Silent in the sense that it does not raise. NOT silent in the sense of
+    unreported -- the chosen slack comes back under "slack" and names its
+    island in "islands" and "lmbda". That is the same rule island_slacks
+    follows: a number the UI displays may not be picked privately.
+    """
+
+    def _without(self, *deleted):
+        """case5 with buses deleted, and everything attached to them."""
+        gone = set(deleted)
+        config = load_config(W1_CONFIG)
+        config["network"]["buses"] = [b for b in config["network"]["buses"]
+                                      if b not in gone]
+        config["network"]["branches"] = {
+            n: spec for n, spec in config["network"]["branches"].items()
+            if not gone & {spec["from"], spec["to"]}
+        }
+        config["fleet"] = {g: spec for g, spec in config["fleet"].items()
+                           if spec["bus"] not in gone}
+        config["load"]["bids"] = {k: spec for k, spec in config["load"]["bids"].items()
+                                  if spec["bus"] not in gone}
+        return scenario_from_config(config, origin="<test>")
+
+    def test_deleting_the_slack_bus_still_clears(self):
+        """configs/w1.yaml names D. Delete D and the market must still price."""
+        cleared = clear(self._without("D"))
+        assert "D" not in cleared["buses"]
+        assert cleared["slack"] in cleared["buses"]
+
+    def test_the_chosen_slack_is_reported(self):
+        """The half that is not silent. A caller that asked for a bus which is
+        gone can see which one it actually got."""
+        cleared = clear(self._without("D"))
+        assert cleared["slack"] == cleared["buses"][0]
+        assert cleared["slack"] in cleared["islands"]
+        assert (cleared["slack"], PEAK_HOUR) in cleared["lmbda"]
+
+    def test_the_choice_is_reproducible(self):
+        """First bus in the caller's order. Same config, same answer twice --
+        and derivable from the config without running anything."""
+        assert clear(self._without("D"))["slack"] == "A"
+        assert clear(self._without("A", "D"))["slack"] == "B"
+        assert clear(self._without("D"))["slack"] == "A"
+
+    def test_deleting_some_other_bus_leaves_the_slack_alone(self):
+        """The fallback fires only when the named slack is actually gone.
+
+        Deleting bus A while D is the slack must not move it -- a slack that
+        wandered on an unrelated edit would make lambda jump on screen for no
+        reason a reader could see.
+        """
+        assert clear(self._without("A"))["slack"] == "D"
+
+    def test_an_explicitly_named_slack_that_is_not_a_bus_still_raises(self):
+        """The fallback is for a STALE RECORD, not for a wrong argument.
+
+        slack= is an assertion by this caller about this call. A typo that
+        silently answered about a different bus is how a sweep reports a day
+        of the wrong lambda and nobody notices. The config's recorded slack is
+        a different thing -- written at parse time and possibly stale by now --
+        and that is the one the editor's delete makes wrong.
+        """
+        with pytest.raises(ValueError, match="slack 'Z' is not a bus"):
+            clear(build_scenario(W1_CONFIG), slack="Z")
+
+    def test_the_prices_do_not_move(self):
+        """Trap 2, asserted where the fallback fires.
+
+        The scenario whose recorded slack is gone must price exactly as it
+        does when the fallback bus is named outright -- same LMPs, same
+        dispatch, same settlement. Only lambda's level is the slack's to
+        decide.
+        """
+        scenario = self._without("D")
+        fallen_back = clear(scenario)
+        named = clear(scenario, slack="A")
+        assert fallen_back["slack"] == named["slack"] == "A"
+        for bus in named["buses"]:
+            assert fallen_back["lmp"][bus, PEAK_HOUR] == pytest.approx(
+                named["lmp"][bus, PEAK_HOUR]
+            )
+        for t in named["hours"]:
+            assert fallen_back["settlement"]["A", t]["residual"] == pytest.approx(
+                0.0, abs=1e-6
+            )
+
+    def test_naming_a_different_slack_moves_lambda_and_no_price(self):
+        """Trap 2 proper, on the cut-down network. lambda moves $30 on case5
+        and no LMP moves at all."""
+        scenario = self._without("D")
+        a = clear(scenario, slack="A")
+        b = clear(scenario, slack="B")
+        assert a["lmbda"]["A", PEAK_HOUR] != pytest.approx(b["lmbda"]["B", PEAK_HOUR])
+        for bus in a["buses"]:
+            assert a["lmp"][bus, PEAK_HOUR] == pytest.approx(b["lmp"][bus, PEAK_HOUR])
+
+
 # ------------------------------------------------------------- the wire
 
 
