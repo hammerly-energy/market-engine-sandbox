@@ -55,7 +55,7 @@ Must hold to floating-point tolerance. If it doesn't, the bug is in PTDF constru
 ## Repo layout
 
 ```
-market-engine/
+market-engine-sandbox/
 ├── data/
 │   ├── raw/                 exactly as downloaded, never edited, gitignored
 │   ├── interim/             parsed, not yet aligned
