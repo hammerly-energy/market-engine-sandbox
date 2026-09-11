@@ -30,7 +30,7 @@ from src.model.pricing import (
     lmps,
     reduced_costs,
 )
-from src.network.ptdf import ptdf
+from src.network.ptdf import ptdf_blocks
 from src.settle.settlement import settle
 
 
@@ -88,7 +88,13 @@ def clear(scenario, slack=None, limits=None):
     # Row order is branches, column order is buses, and both are fixed HERE and
     # passed down. Every consumer of the PTDF re-derives its index from these
     # two lists rather than from its own ordering assumption.
-    PTDF = ptdf(buses, branches, slack)
+    #
+    # ptdf_blocks, not ptdf: a cut network is two markets, not an error. The
+    # matrix comes back block diagonal and islands says which bus belongs to
+    # which market, keyed by that market's slack. For a connected network
+    # there is exactly one entry and the matrix is ptdf()'s, unchanged.
+    PTDF, islands = ptdf_blocks(buses, branches, slack)
+    island_of = {b: home for home, group in islands.items() for b in group}
 
     Fmax = {br.name: br.limit_mw for br in branches}
     if limits:
@@ -118,6 +124,7 @@ def clear(scenario, slack=None, limits=None):
         buses=buses,
         PTDF=PTDF,
         Fmax=Fmax,
+        islands=islands,
         bid_value=bid_value,
         bid_mw=bid_mw,
         bid_bus=bid_bus,
@@ -134,8 +141,13 @@ def clear(scenario, slack=None, limits=None):
     for (k, t), mw in res["d"].items():
         served_by_bus[bid_bus[k]][t] += mw
 
+    # Which lines belong to which market. Every branch has both ends in one
+    # component, so from_bus decides it.
+    island_lines = {home: [br.name for br in branches if br.from_bus in set(group)]
+                    for home, group in islands.items()}
+
     mu = congestion_prices(res)
-    lmp = lmps(res, buses, lines, PTDF)
+    lmp = lmps(res, buses, lines, PTDF, island_of)
     cong = congestion(res, buses, lines, PTDF)
 
     cost, Pmax = scenario.cost(), scenario.pmax()
@@ -143,30 +155,42 @@ def clear(scenario, slack=None, limits=None):
     slack_mw = headroom(res, Pmax)
     reduced = reduced_costs(lmp, cost, gen_bus, scenario.hours)
 
-    # Settlement is per hour because the identity is per hour. Summing the day
-    # first would let a positive residual in one hour cancel a negative one in
-    # another and report a clean zero over a broken solve.
+    # Settlement is per island AND per hour, because the identity is per
+    # island per hour. Summing the day would let a positive residual in one
+    # hour cancel a negative one in another; summing the islands would do the
+    # identical thing one dimension over, and a cut network is exactly when
+    # the two halves are most likely to be wrong in opposite directions.
     settlement = {}
-    for t in scenario.hours:
-        gen_mw = {b: 0.0 for b in buses}
-        for g, bus in gen_bus.items():
-            gen_mw[bus] += res["p"][g, t]
-        settlement[t] = settle(
-            lmp={b: lmp[b, t] for b in buses},
-            # SERVED, not declared. Load pays for what it took. Billing
-            # declared demand while the injection carries served demand puts
-            # the difference straight into the residual, where it reads like
-            # a PTDF sign error and is not one.
-            load_mw={b: served_by_bus[b][t] for b in buses},
-            gen_mw=gen_mw,
-            mu={l: mu[l, t] for l in lines},
-            flows={l: res["f"][l, t] for l in lines},
-        )
+    for home, group in islands.items():
+        for t in scenario.hours:
+            gen_mw = {b: 0.0 for b in group}
+            for g, bus in gen_bus.items():
+                if bus in gen_mw:
+                    gen_mw[bus] += res["p"][g, t]
+            settlement[home, t] = settle(
+                lmp={b: lmp[b, t] for b in group},
+                # SERVED, not declared. Load pays for what it took. Billing
+                # declared demand while the injection carries served demand
+                # puts the difference straight into the residual, where it
+                # reads like a PTDF sign error and is not one.
+                load_mw={b: served_by_bus[b][t] for b in group},
+                gen_mw=gen_mw,
+                # Only this island's lines. A line in the other island has its
+                # own rent and belongs in its own ledger.
+                mu={l: mu[l, t] for l in island_lines[home]},
+                flows={l: res["f"][l, t] for l in island_lines[home]},
+            )
 
     return {
         "buses": buses,
         "lines": lines,
         "slack": slack,
+        # {slack: [buses]}. One entry for a connected network; more once a cut
+        # has split it, each entry a market with its own lambda and its own
+        # settlement. Named by the slack because lambda IS the LMP there.
+        "islands": islands,
+        "island_of": island_of,          # {bus: island}
+        "island_lines": island_lines,    # {island: [line]}
         "hours": list(scenario.hours),
         "limits": Fmax,
         "gen_bus": gen_bus,
@@ -175,7 +199,7 @@ def clear(scenario, slack=None, limits=None):
         "mu": mu,                  # {(line, hour): $/MWh}
         "lmp": lmp,                # {(bus, hour): $/MWh}
         "congestion": cong,        # {(bus, hour): $/MWh}, lmp - lmbda
-        "lmbda": res["lmbda"],     # {hour: $/MWh}
+        "lmbda": res["lmbda"],     # {(island, hour): $/MWh}
         "gen_cost": cost,          # {gen: $/MWh}
         "gen_pmax": Pmax,          # {gen: MW}
         # Where each unit sits, what its headroom is, and what one more MW is
@@ -191,7 +215,7 @@ def clear(scenario, slack=None, limits=None):
         "bid_bus": {b.name: b.bus for b in scenario.bids},
         "bid_value": scenario.bid_value(),   # {bid: $/MWh or None}
         "bid_mw": scenario.bid_mw(),         # {(bid, hour): MW} asked for
-        "settlement": settlement,  # {hour: {...}}
+        "settlement": settlement,  # {(island, hour): {...}}
         "PTDF": PTDF,
     }
 

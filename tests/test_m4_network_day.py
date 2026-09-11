@@ -71,8 +71,8 @@ class TestSettlementIdentity:
 
     def test_holds_in_every_hour(self, day):
         for t in day["hours"]:
-            assert day["settlement"][t]["residual"] == pytest.approx(0.0, abs=1e-6), (
-                f"hour {t}: residual {day['settlement'][t]['residual']}"
+            assert day["settlement"]["D", t]["residual"] == pytest.approx(0.0, abs=1e-6), (
+                f"hour {t}: residual {day['settlement']['D', t]['residual']}"
             )
 
     def test_congestion_rent_is_zero_exactly_when_nothing_binds(self, day):
@@ -84,7 +84,7 @@ class TestSettlementIdentity:
         earning nothing means mu was extracted with the wrong sign.
         """
         for t in day["hours"]:
-            rent = day["settlement"][t]["congestion_rent"]
+            rent = day["settlement"]["D", t]["congestion_rent"]
             if binding_lines(day, t):
                 assert rent > 0, f"hour {t}: DE binds but rent is {rent}"
             else:
@@ -110,7 +110,7 @@ class TestCongestionSwitches:
             if binding_lines(day, t):
                 continue
             for b in day["buses"]:
-                assert day["lmp"][b, t] == pytest.approx(day["lmbda"][t])
+                assert day["lmp"][b, t] == pytest.approx(day["lmbda"]["D", t])
 
     def test_congested_hours_separate(self, day):
         """A binding line must actually move prices apart.
@@ -162,12 +162,13 @@ class TestSeparability:
                 D={b: {t: D[b][t]} for b in D},
                 gen_bus=gen_bus, buses=day["buses"],
                 PTDF=day["PTDF"], Fmax=day["limits"],
+                islands=day["islands"],
             )
             for g in gen_bus:
                 assert alone["p"][g, t] == pytest.approx(day["dispatch"][g, t]), (
                     f"hour {t}, {g}: joint and single-hour dispatch differ"
                 )
-            assert alone["lmbda"][t] == pytest.approx(day["lmbda"][t])
+            assert alone["lmbda"]["D", t] == pytest.approx(day["lmbda"]["D", t])
 
     def test_day_cost_is_the_sum_of_hourly_costs(self, day, scenario):
         """The objective is additive across hours because nothing links them."""
@@ -209,7 +210,7 @@ class TestM3RegressionAtPeak:
         expected = {"A": 16.98, "B": 26.38, "C": 30.00, "D": 39.94, "E": 10.00}
         for bus, lmp in expected.items():
             assert day["lmp"][bus, PEAK_HOUR] == pytest.approx(lmp, abs=5e-3)
-        assert day["lmbda"][PEAK_HOUR] == pytest.approx(39.94, abs=5e-3)
+        assert day["lmbda"]["D", PEAK_HOUR] == pytest.approx(39.94, abs=5e-3)
 
     def test_peak_hour_reproduces_m3_dispatch(self, day):
         """MATPOWER's own OPF answer for case5, via the m3 notes."""
@@ -270,7 +271,7 @@ class TestForever:
                     for li, l in enumerate(day["lines"])
                 )
                 assert day["lmp"][b, t] == pytest.approx(
-                    day["lmbda"][t] + congestion, abs=1e-9
+                    day["lmbda"]["D", t] + congestion, abs=1e-9
                 )
 
     def test_flows_match_ptdf_times_injection(self, day, scenario):

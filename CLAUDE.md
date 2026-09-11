@@ -346,7 +346,7 @@ be checked against a list of what was already true.
 
 | A visitor does this | What happens now | Verdict |
 |---|---|---|
-| Cuts a line, islanding a bus | `ValueError: network is disconnected: ['E'] cannot reach slack 'D'` | Clean, named, displayable |
+| Cuts a line, islanding a bus | ~~`ValueError: network is disconnected`~~ → prices each island separately, one λ each | **Was** clean, named and displayable. It was also the wrong answer — see below |
 | Names a slack that is not a bus | `ValueError: slack 'Z' is not a bus in [...]` | Clean |
 | Adds a branch with zero reactance | `ValueError: reactance_pu must be > 0` at `Branch.__post_init__` | Clean, caught at construction |
 | Duplicates a bus or branch name | `ValueError` at `Scenario.__post_init__` | Clean |
@@ -429,8 +429,65 @@ green *before* the LP changes. `configs/w1.yaml` is the control: it restates
 bit, today because the price is ignored and afterwards because a bid at the
 cap outbids every generator.
 
-The other two W1 questions — what an island means, and what happens when the
-slack is deleted — are still open.
+### W1 decision: what an island means
+
+**Two markets, not an error.** A cut network is priced component by
+component: one energy balance row, one λ, one slack and one settlement
+identity per island.
+
+The insight that makes this a forty-line change rather than a rewrite is that
+**an island is a balance constraint, not a PTDF.** `ptdf.py` refused because
+a disconnected `B_bus` carries two zero eigenvalues and the rank-1 fix
+removes one — a linear-algebra symptom. The market problem was one line away
+in `dispatch.py`: a single system-wide balance row says total generation
+equals total demand, which lets a generator in one island serve load in
+another through a line that does not exist, and no flow limit objects because
+the constraint set only contains lines that exist.
+
+```
+  one balance row, two islands              one row per island
+  ────────────────────────────              ──────────────────
+  Σ p  ==  Σ D                              Σ    p  ==  Σ    D      island 1
+     ↑                                       g∈I₁         i∈I₁
+  brighton at E serves B's load             Σ    p  ==  Σ    D      island 2
+  through a line that isn't there            g∈I₂         i∈I₂
+```
+
+So the PTDF goes **block diagonal** — an injection in one island moves no
+line in another, which is physics and not bookkeeping — and `m.inj`, `m.f`
+and both flow limits are untouched. Only the balance is re-indexed.
+`ptdf_blocks()` assembles the blocks by calling `ptdf()` per component, so
+there is no second implementation of the linear algebra. `ptdf()` itself
+keeps refusing a disconnected network, because a PTDF relative to one slack
+*is* a single-component object.
+
+**Islands are named by their slack**, and λ is keyed `(island, hour)`. λ is
+the LMP at the slack, so the name is the honest one; an index would mean
+nothing to a reader and would renumber the moment another line is cut. The
+wire carries `lmbda` as `{island: [per hour]}` always — never a bare array,
+because a shape that changes with the topology is a shape the frontend
+branches on, and it would branch wrong the first time someone cut a line.
+
+**The user's slack keeps its island; every other island takes its first bus**
+in config order. Deterministic, reproducible from the config alone, and
+returned rather than chosen privately — a number the UI displays may not be
+picked silently.
+
+Two cases fall out and neither is a bug:
+
+- **An island with load and no generation** sheds and prices at the cap. Only
+  reachable because the elastic demand side landed first; before that the
+  island was infeasible and took the whole solve down with it.
+- **An island with generation and no load** is degenerate. `p = 0`, `d = 0`,
+  and λ sits anywhere between zero and the cheapest offer. Trap 3, and the
+  view must say so rather than print the number as though it meant something.
+
+Settlement is now per island **and** per hour. Summing the islands would let
+a positive residual in one cancel a negative one in the other — the per-hour
+mistake, one dimension over.
+
+The last W1 question — what happens when the slack is deleted — is still
+open.
 
 ### Degeneracy under a moving slider
 

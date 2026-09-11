@@ -43,7 +43,7 @@ from src.model.clearing import binding_lines, clear
 from src.model.dispatch import solve_dispatch_network_day
 from src.model.inputs import Branch
 from src.model.pricing import congestion_prices, lmps
-from src.network.ptdf import ptdf
+from src.network.ptdf import ptdf, ptdf_blocks
 from src.network.topology import (
     b_bus, b_branch, b_flow, components, incidence)
 from src.settle.settlement import settle
@@ -376,7 +376,8 @@ def _clear(limits="config"):
     buses = [b.name for b in scenario.buses]
     branches = list(scenario.branches)
     lines = [br.name for br in branches]
-    P = ptdf(buses, branches, scenario.provenance["slack"])
+    slack = scenario.provenance["slack"]
+    P, islands = ptdf_blocks(buses, branches, slack)
 
     Fmax = {br.name: (np.inf if limits == "none" else br.limit_mw)
             for br in branches}
@@ -389,9 +390,13 @@ def _clear(limits="config"):
         buses=buses,
         PTDF=P,
         Fmax=Fmax,
+        islands=islands,
     )
     return {
         "res": res,
+        "slack": slack,
+        "islands": islands,
+        "island_of": {b: home for home, g in islands.items() for b in g},
         "buses": buses,
         "lines": lines,
         "PTDF": P,
@@ -439,7 +444,7 @@ class TestClearingInvariants:
         s = _clear(limits)
         t = s["hour"]
         mu = congestion_prices(s["res"])
-        lmp = lmps(s["res"], s["buses"], s["lines"], s["PTDF"])
+        lmp = lmps(s["res"], s["buses"], s["lines"], s["PTDF"], s["island_of"])
 
         payments = sum(s["demand"][i][t] * lmp[i, t] for i in s["buses"])
         revenue = sum(mw * lmp[s["gen_bus"][g], t]
@@ -494,11 +499,11 @@ class TestClearingInvariants:
         s = _clear("none")
         t = s["hour"]
         mu = congestion_prices(s["res"])
-        lmp = lmps(s["res"], s["buses"], s["lines"], s["PTDF"])
+        lmp = lmps(s["res"], s["buses"], s["lines"], s["PTDF"], s["island_of"])
         for l in s["lines"]:
             assert mu[l, t] == pytest.approx(0.0, abs=1e-9)
         for i in s["buses"]:
-            assert lmp[i, t] == pytest.approx(s["res"]["lmbda"][t])
+            assert lmp[i, t] == pytest.approx(s["res"]["lmbda"][s["slack"], t])
 
 
 class TestCase5Uncongested:
@@ -531,7 +536,7 @@ class TestCase5Uncongested:
         """Solitude is marginal, so lambda is its offer -- at every bus."""
         s = _clear("none")
         t = s["hour"]
-        lmp = lmps(s["res"], s["buses"], s["lines"], s["PTDF"])
+        lmp = lmps(s["res"], s["buses"], s["lines"], s["PTDF"], s["island_of"])
         for i in s["buses"]:
             assert lmp[i, t] == pytest.approx(30.0)
 
@@ -593,7 +598,7 @@ class TestCase5Congested:
         """
         s = _clear("config")
         t = s["hour"]
-        lmp = lmps(s["res"], s["buses"], s["lines"], s["PTDF"])
+        lmp = lmps(s["res"], s["buses"], s["lines"], s["PTDF"], s["island_of"])
         assert {i: lmp[i, t] for i in s["buses"]} == pytest.approx({
             "A": 16.98,
             "B": 26.38,
@@ -611,7 +616,7 @@ class TestCase5Congested:
         """
         s = _clear("config")
         t = s["hour"]
-        lmp = lmps(s["res"], s["buses"], s["lines"], s["PTDF"])
+        lmp = lmps(s["res"], s["buses"], s["lines"], s["PTDF"], s["island_of"])
         assert lmp["D", t] - lmp["E", t] > 1.0
 
     def test_congestion_costs_the_system_money(self):
@@ -655,19 +660,25 @@ class TestClearEntryPoint:
             assert auto["flows"][l, t] == pytest.approx(by_hand["res"]["f"][l, t])
 
         want = lmps(by_hand["res"], by_hand["buses"], by_hand["lines"],
-                    by_hand["PTDF"])
+                    by_hand["PTDF"], by_hand["island_of"])
         for b in by_hand["buses"]:
             assert auto["lmp"][b, t] == pytest.approx(want[b, t])
 
     def test_settlement_identity_holds(self):
         """The primary correctness test, now reported by clear() itself.
 
-        Every hour separately. A day-level sum could hide a positive residual
-        in one hour cancelling a negative one in another.
+        Every island, every hour, separately. A day-level sum could hide a
+        positive residual in one hour cancelling a negative one in another,
+        and an island-level sum would do the same thing one dimension over.
+        case5 is one island, so the outer loop runs once -- and it runs at
+        all so that this assertion keeps its meaning on a cut network.
         """
         cleared = clear(build_scenario(CONFIG))
-        for t in cleared["hours"]:
-            assert cleared["settlement"][t]["residual"] == pytest.approx(0.0, abs=1e-6)
+        for home in cleared["islands"]:
+            for t in cleared["hours"]:
+                assert cleared["settlement"][home, t]["residual"] == pytest.approx(
+                    0.0, abs=1e-6
+                )
 
     def test_limits_override_reaches_the_solver(self):
         """The lever a sweep or a slider pulls.
@@ -1133,7 +1144,7 @@ class TestBindingDirection:
         buses = ["A", "B"]
         branches = [branch("AB", "A", "B", 0.1, limit=100.0)]
         lines = ["AB"]
-        P = ptdf(buses, branches, "A")
+        P, islands = ptdf_blocks(buses, branches, "A")
         Fmax = {"AB": 100.0}
         gen_bus = {"a": "A", "b": "B"}
         D = {"A": {self.HOUR: 0.0}, "B": {self.HOUR: 300.0}}
@@ -1145,16 +1156,19 @@ class TestBindingDirection:
             buses=buses,
             PTDF=P,
             Fmax=Fmax,
+            islands=islands,
         )
         return {
             "res": res, "buses": buses, "lines": lines, "PTDF": P,
+            "slack": "A", "islands": islands,
+            "island_of": {b: home for home, g in islands.items() for b in g},
             "Fmax": Fmax, "gen_bus": gen_bus, "demand": D,
         }
 
     def _settle(self, s):
         t = self.HOUR
         mu = congestion_prices(s["res"])
-        lmp = lmps(s["res"], s["buses"], s["lines"], s["PTDF"])
+        lmp = lmps(s["res"], s["buses"], s["lines"], s["PTDF"], s["island_of"])
         gen_mw = {b: 0.0 for b in s["buses"]}
         for g, bus in s["gen_bus"].items():
             gen_mw[bus] += s["res"]["p"][g, t]
@@ -1183,7 +1197,7 @@ class TestBindingDirection:
         """LMPs first, so a settlement failure cannot be blamed on pricing."""
         s = self._two_bus_upper_binding()
         t = self.HOUR
-        lmp = lmps(s["res"], s["buses"], s["lines"], s["PTDF"])
+        lmp = lmps(s["res"], s["buses"], s["lines"], s["PTDF"], s["island_of"])
         assert lmp["A", t] == pytest.approx(10.0)
         assert lmp["B", t] == pytest.approx(40.0)
         assert s["res"]["p"]["a", t] == pytest.approx(100.0)

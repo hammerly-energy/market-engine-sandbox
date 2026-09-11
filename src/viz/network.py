@@ -51,7 +51,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 
-from src.network.ptdf import ptdf
+from src.network.ptdf import ptdf, ptdf_blocks
 from src.network.topology import b_bus, incidence
 
 SURFACE = "#fcfcfb"
@@ -644,7 +644,8 @@ if __name__ == "__main__":
     from src.model.pricing import congestion_prices, lmps
     from src.settle.settlement import settle
 
-    P = ptdf(buses, branches, slack)
+    P, islands = ptdf_blocks(buses, branches, slack)
+    island_of = {b: home for home, g in islands.items() for b in g}
     lines = [b.name for b in branches]
     Fmax = {b.name: b.limit_mw for b in branches}
 
@@ -660,14 +661,16 @@ if __name__ == "__main__":
         buses=buses,
         PTDF=P,
         Fmax=Fmax,
+        islands=islands,
     )
 
     # Drop the hour index. This case is one snapshot; the figures take plain
     # per-generator and per-bus mappings.
     feasible = {g["name"]: cleared["p"][g["name"], hour] for g in fleet}
     mu = {l: congestion_prices(cleared)[l, hour] for l in lines}
-    lmp = {b: v for (b, t), v in lmps(cleared, buses, lines, P).items()}
-    lam = cleared["lmbda"][hour]
+    lmp = {b: v for (b, t), v in
+           lmps(cleared, buses, lines, P, island_of).items()}
+    lam = cleared["lmbda"][slack, hour]
     flow = {l: cleared["f"][l, hour] for l in lines}
 
     # The merit-order dispatch panel (a) of figure 4 draws, kept separate

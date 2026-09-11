@@ -81,7 +81,7 @@ class TestBitIdentity:
     def test_prices_and_cost_are_identical(self, w1, m4):
         assert w1["cost"] == pytest.approx(m4["cost"])
         for t in m4["hours"]:
-            assert w1["lmbda"][t] == pytest.approx(m4["lmbda"][t])
+            assert w1["lmbda"]["D", t] == pytest.approx(m4["lmbda"]["D", t])
 
     def test_the_published_lmps_survive(self, w1):
         """M3's regression test, through the new ingest path."""
@@ -90,7 +90,7 @@ class TestBitIdentity:
 
     def test_the_settlement_identity_holds_every_hour(self, w1):
         for t in w1["hours"]:
-            assert w1["settlement"][t]["residual"] == pytest.approx(0.0, abs=1e-6)
+            assert w1["settlement"]["D", t]["residual"] == pytest.approx(0.0, abs=1e-6)
 
     def test_the_network_and_fleet_blocks_still_match_m4(self):
         """Guards the verbatim copy, the same way M4 guards its copy of M3.
@@ -252,7 +252,7 @@ class TestElasticDemand:
         """
         cleared = clear(self._shortfall())
         cap = max(build_scenario(W1_CONFIG).bid_value().values())
-        assert cleared["lmbda"][PEAK_HOUR] == pytest.approx(cap)
+        assert cleared["lmbda"]["D", PEAK_HOUR] == pytest.approx(cap)
 
     def test_a_bid_below_the_clearing_price_is_not_served(self):
         """Demand response, with no code path of its own.
@@ -280,7 +280,7 @@ class TestElasticDemand:
         """
         cleared = clear(self._shortfall())
         for t in cleared["hours"]:
-            assert cleared["settlement"][t]["residual"] == pytest.approx(0.0, abs=1e-6)
+            assert cleared["settlement"]["D", t]["residual"] == pytest.approx(0.0, abs=1e-6)
 
     def test_a_shortfall_serves_what_it_can(self):
         """Curtailment is partial, not all-or-nothing, and is priced."""

@@ -134,7 +134,7 @@ def _validate_bids(bid_value, bid_mw, bid_bus, buses):
             raise ValueError(f"negative quantity for bid {k} in hour {t}: {mw}")
 
 
-def solve_dispatch_network_day(c, Pmax, D, gen_bus, buses, PTDF, Fmax,
+def solve_dispatch_network_day(c, Pmax, D, gen_bus, buses, PTDF, Fmax, islands,
                                bid_value=None, bid_mw=None, bid_bus=None):
     """Clear a NODAL energy market across a set of hours, on a DC network.
 
@@ -145,14 +145,35 @@ def solve_dispatch_network_day(c, Pmax, D, gen_bus, buses, PTDF, Fmax,
     buses     -- ordered bus names; fixes the PTDF COLUMN order
     PTDF      -- (L, N) array; rows ordered as Fmax's keys
     Fmax      -- {line: MW}, .inf allowed        fixes the PTDF ROW order
+    islands   -- {slack: [buses]} from ptdf.island_slacks(). ONE ENTRY for a
+                 connected network, more when the network has been cut
     bid_value -- {bid: $/MWh} willingness to pay, ELASTIC bids only
     bid_mw    -- {(bid, t): MW} the most that bid will take in that hour
     bid_bus   -- {bid: bus}
 
-    Returns {"p": {(gen, t): MW}, "d": {(bid, t): MW}, "lmbda": {t: $/MWh},
+    Returns {"p": {(gen, t): MW}, "d": {(bid, t): MW},
+             "lmbda": {(island, t): $/MWh},
              "cost": $ PRODUCTION cost, "benefit": $ consumer benefit,
              "f": {(line, t): MW}, "mu_up"/"mu_dn": {(line, t): $/MWh}}.
     Raises RuntimeError if the solve is not optimal.
+
+    -- islands --------------------------------------------------------------
+
+    A disconnected network is not a broken network, it is two markets. The
+    thing that makes it two is ONE BALANCE ROW PER COMPONENT:
+
+        A ---- B ---- C        E        sum_g p == sum_i D   one row
+                                        lets brighton at E serve B's load
+        (the line to E is cut)          through a line that is not there
+
+    So the balance is indexed by island, and lambda comes back keyed by
+    (island, t). The island is named by its SLACK, because lambda IS the LMP
+    at the slack -- an index would mean nothing to a reader and would
+    renumber the moment another line is cut.
+
+    Nothing else changes. m.inj, m.f and both flow limits are untouched,
+    because a block-diagonal PTDF already says an injection in one island
+    moves no line in another. See ptdf.ptdf_blocks.
 
     -- the demand side ------------------------------------------------------
 
@@ -239,6 +260,9 @@ def solve_dispatch_network_day(c, Pmax, D, gen_bus, buses, PTDF, Fmax,
     m.T = pyo.Set(initialize=hours, ordered=True)
     m.B = pyo.Set(initialize=list(buses), ordered=True)
     m.L = pyo.Set(initialize=list(Fmax), ordered=True)
+    # I is the set of markets. One entry for a connected network, and then
+    # every expression below is the M4 one with a sum of length one around it.
+    m.I = pyo.Set(initialize=list(islands), ordered=True)
     # K is the demand-side twin of G. Empty through M4, and an empty Pyomo Set
     # builds empty sums, so every expression below collapses to the M4 one
     # rather than needing a branch.
@@ -285,13 +309,15 @@ def solve_dispatch_network_day(c, Pmax, D, gen_bus, buses, PTDF, Fmax,
     #    The network decides where the power can physically go, and that is
     #    step 6's job; this only says the books balance. One dual per hour,
     #    the same at every bus, which is exactly the energy component.
-    def _balance(m, t):
+    def _balance(m, s, t):
+        inside = set(islands[s])
         return (
-            sum(m.p[g, t] for g in m.G)
-            == sum(D[i].get(t, 0.0) for i in buses) + sum(m.d[k, t] for k in m.K)
+            sum(m.p[g, t] for g in m.G if gen_bus[g] in inside)
+            == sum(D[i].get(t, 0.0) for i in inside)
+            + sum(m.d[k, t] for k in m.K if bid_bus[k] in inside)
         )
 
-    m.balance = pyo.Constraint(m.T, rule=_balance)
+    m.balance = pyo.Constraint(m.I, m.T, rule=_balance)
 
     # 5. net injection and line flow. EXPRESSIONS, not constraints.
     #    An Expression names a sum; it asserts nothing and carries no dual.
@@ -362,7 +388,7 @@ def solve_dispatch_network_day(c, Pmax, D, gen_bus, buses, PTDF, Fmax,
         # Served MW per elastic bid. Empty when every bid is inelastic, in
         # which case served demand is D and the caller already has it.
         "d": {(k, t): pyo.value(m.d[k, t]) for k in m.K for t in m.T},
-        "lmbda": {t: m.dual[m.balance[t]] for t in m.T},
+        "lmbda": {(s, t): m.dual[m.balance[s, t]] for s in m.I for t in m.T},
         "cost": pyo.value(m.production_cost),
         "benefit": pyo.value(m.benefit),
         "f": {(l, t): pyo.value(m.f[l, t]) for l in m.L for t in m.T},

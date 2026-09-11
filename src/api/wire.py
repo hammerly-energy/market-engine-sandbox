@@ -81,6 +81,7 @@ def encode(cleared):
     gens = list(cleared["gen_bus"])
 
     bids = list(cleared["bid_bus"])
+    islands = list(cleared["islands"])
     settlement = cleared["settlement"]
     fields = ("payments", "revenue", "congestion_rent", "rent_from_duals", "residual")
 
@@ -108,7 +109,15 @@ def encode(cleared):
         "mu": _series(cleared["mu"], lines, hours),
         "lmp": _series(cleared["lmp"], buses, hours),
         "congestion": _series(cleared["congestion"], buses, hours),
-        "lmbda": [_num(cleared["lmbda"][t]) for t in hours],
+        # One market per island, named by its slack. A connected network has
+        # exactly one entry and a cut one has several -- never a bare array,
+        # because a shape that changes with the topology is a shape the
+        # frontend has to branch on, and it would branch wrong the first time
+        # someone cut a line.
+        "islands": {home: list(group) for home, group in cleared["islands"].items()},
+        "island_of": dict(cleared["island_of"]),
+        "island_lines": {k: list(v) for k, v in cleared["island_lines"].items()},
+        "lmbda": {s: [_num(cleared["lmbda"][s, t]) for t in hours] for s in islands},
         "bids": bids,
         "bid_bus": dict(cleared["bid_bus"]),
         # null means inelastic: must be served, no price at which it walks.
@@ -126,8 +135,12 @@ def encode(cleared):
         # residual is here and is meant to be displayed: it is the claim the
         # repo rests on, and a site that hides it is doing the thing this repo
         # exists to not do.
+        # Per island AND per hour. Summing the islands would let a positive
+        # residual in one cancel a negative one in the other, which is the
+        # per-hour mistake one dimension over.
         "settlement": {
-            f: [_num(settlement[t][f]) for t in hours] for f in fields
+            s: {f: [_num(settlement[s, t][f]) for t in hours] for f in fields}
+            for s in islands
         },
         "PTDF": [[float(v) for v in row] for row in cleared["PTDF"]],
     }

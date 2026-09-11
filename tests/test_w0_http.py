@@ -139,9 +139,13 @@ class TestWireFidelity:
         assert over_http["lines"] == in_process["lines"]
         assert over_http["cost"] == pytest.approx(in_process["cost"])
         for t, hour in enumerate(over_http["hours"]):
-            assert over_http["lmbda"][t] == pytest.approx(in_process["lmbda"][hour])
-            for f, series in over_http["settlement"].items():
-                assert series[t] == pytest.approx(in_process["settlement"][hour][f])
+            assert over_http["lmbda"]["D"][t] == pytest.approx(
+                in_process["lmbda"]["D", hour]
+            )
+            for f, series in over_http["settlement"]["D"].items():
+                assert series[t] == pytest.approx(
+                    in_process["settlement"]["D", hour][f]
+                )
 
     def test_the_residual_is_on_the_wire_and_is_zero_every_hour(self, over_http):
         """The claim the repo rests on, per hour, as the frontend receives it.
@@ -150,7 +154,7 @@ class TestWireFidelity:
         one hour cancel a negative one in another and report a clean zero over
         a broken solve.
         """
-        for r in over_http["settlement"]["residual"]:
+        for r in over_http["settlement"]["D"]["residual"]:
             assert r == pytest.approx(0.0, abs=1e-6)
 
     def test_hour_labels_keep_their_type(self, over_http):
@@ -193,7 +197,7 @@ class TestWireFidelity:
         # never has to check it -- and never has to compute it.
         for b in over_http["buses"]:
             assert over_http["lmp"][b][t] == pytest.approx(
-                over_http["lmbda"][t] + over_http["congestion"][b][t]
+                over_http["lmbda"]["D"][t] + over_http["congestion"][b][t]
             )
         # The slack carries no congestion, by construction. Trap 2.
         assert over_http["congestion"][over_http["slack"]][t] == pytest.approx(0.0)
@@ -226,7 +230,9 @@ class TestWireFidelity:
             "/clear", json={"config": m4_config, "slack": "A"}
         ).json()
         t = moved["hours"].index(PEAK_HOUR)
-        assert moved["lmbda"][t] != pytest.approx(in_process["lmbda"][PEAK_HOUR])
+        assert moved["lmbda"]["A"][t] != pytest.approx(
+            in_process["lmbda"]["D", PEAK_HOUR]
+        )
         for b in moved["buses"]:
             assert moved["lmp"][b][t] == pytest.approx(in_process["lmp"][b, PEAK_HOUR])
 
@@ -340,10 +346,6 @@ class TestRejects:
     @pytest.mark.parametrize(
         "mutate, fragment",
         [
-            # Cut both lines into E: the bus cannot reach the slack at all.
-            (lambda c: [c["network"]["branches"].pop("AE"),
-                        c["network"]["branches"].pop("DE")],
-             "disconnected"),
             (lambda c: c["network"]["branches"]["AB"].__setitem__("reactance_pu", 0.0),
              "reactance_pu"),
             (lambda c: c["network"].__setitem__("buses", ["A", "A", "B", "C", "D", "E"]),
@@ -463,7 +465,7 @@ class TestDemandSide:
     def test_a_shortfall_is_a_priced_solve_not_an_error(self, short):
         """The W1 goal, over HTTP. No 4xx, no traceback -- a price."""
         t = short["hours"].index(PEAK_HOUR)
-        assert short["lmbda"][t] == pytest.approx(5000.0)
+        assert short["lmbda"]["D"][t] == pytest.approx(5000.0)
         assert all(short["lmp"][b][t] == pytest.approx(5000.0) for b in short["buses"])
 
     def test_curtailment_is_visible_and_not_implied(self, short):
@@ -477,7 +479,7 @@ class TestDemandSide:
 
     def test_the_residual_is_still_zero_in_a_short_hour(self, short):
         """Billed on what load took, not what it asked for."""
-        for r in short["settlement"]["residual"]:
+        for r in short["settlement"]["D"]["residual"]:
             assert r == pytest.approx(0.0, abs=1e-6)
 
     def test_an_inelastic_bid_crosses_as_a_null_value(self, client, m4_config):

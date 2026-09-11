@@ -14,6 +14,16 @@ def congestion_prices(res):
         for (l, t) in res["mu_up"]
     }
 
+def _hours(res):
+    """The horizon, from lmbda's (island, hour) keys.
+
+    lmbda is keyed by island as well as hour, so the hours are one level in.
+    Taken as a set and not sorted: these are dict keys, and the order of a
+    comprehension over them never reaches a caller.
+    """
+    return {t for _, t in res["lmbda"]}
+
+
 def congestion(res, buses, lines, PTDF):
     """The congestion component of the LMP, alone. {(bus, t): $/MWh}.
 
@@ -37,23 +47,29 @@ def congestion(res, buses, lines, PTDF):
     return {
         (i, t): float(sum(PTDF[row[l], col[i]] * mu[l, t] for l in lines))
         for i in buses
-        for t in res["lmbda"]
+        for t in _hours(res)
     }
 
 
-def lmps(res, buses, lines, PTDF):
+def lmps(res, buses, lines, PTDF, island_of):
     """Locational Marginal Price - Cost of serving one more MW of load at a bus, including congestion.
 
-    {(bus, t): $/MWh}."""
+    {(bus, t): $/MWh}.
+
+    island_of is {bus: island}, and it is what makes this work on a cut
+    network: a bus is priced against ITS OWN market's lambda, not against a
+    system lambda that no longer exists. For a connected network every bus
+    maps to the same island and the sum below is M4's, unchanged.
+    """
     # float() because PTDF is a numpy array and its scalars carry through the
     # sum. np.float64 compares and prints the same, but it leaks numpy into
     # every downstream consumer -- settlement, the figures, a JSON dump of a
     # run -- for no benefit.
     cong = congestion(res, buses, lines, PTDF)
     return {
-        (i, t): float(res["lmbda"][t] + cong[i, t])
+        (i, t): float(res["lmbda"][island_of[i], t] + cong[i, t])
         for i in buses
-        for t in res["lmbda"]
+        for t in _hours(res)
     }
 
 
