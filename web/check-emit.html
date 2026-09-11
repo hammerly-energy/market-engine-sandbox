@@ -1,0 +1,107 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>emitter check</title>
+<style>
+ body{font:13px ui-monospace,Menlo,monospace;margin:12px;background:#fcfcfb}
+ li{margin:2px 0}
+ .ok{color:#0a7a3f} .bad{color:#a8380f}
+ pre{background:#f3f2ee;padding:8px;overflow:auto;max-height:240px}
+</style>
+<!-- W2.8's half of the round trip, and the only kind this repo can run: the
+     emitter is JavaScript and there is no JavaScript runtime in this
+     environment, so state.js is imported into a real browser instead. No
+     iframe here -- toConfig is a pure function of the seed, so this page
+     calls it directly rather than driving the app that calls it.
+
+     The claim, in two halves that meet at web/data/case5.json:
+
+       toConfig(stateFromSeed(seed)) == seed.config        asserted here
+       seed.config                   == configs/w1.yaml    asserted in
+                                        tests/test_w2_editor.py,
+                                        TestTheSeedIsW1AndNotACopyThatDrifted
+
+     So the numbers the editor posts are w1.yaml's numbers, and neither half
+     can loosen without the other noticing. `name` is the one field allowed to
+     differ: the config the editor emits is not case5 any more the moment a
+     visitor touches a lever, and it says so.
+
+     Run it: serve the app and open /check-emit.html. Or headless:
+
+       .venv/bin/uvicorn src.api.app:app --port 8000
+       chrome --headless=new --screenshot=out.png --window-size=1000,800 \
+              --virtual-time-budget=8000 http://127.0.0.1:8000/check-emit.html
+
+     A development page, not linked from the app. Drop it from the W4 deploy. -->
+<ul id="out"></ul>
+<pre id="diff"></pre>
+<script type="module">
+import { fetchSeed, stateFromSeed, toConfig, toLimits } from "./js/state.js";
+
+const out = document.querySelector("#out");
+const results = [];
+function check(name, cond, extra = "") {
+  results.push(cond);
+  const li = document.createElement("li");
+  li.className = cond ? "ok" : "bad";
+  li.textContent = `${cond ? "PASS" : "FAIL"}  ${name}${extra ? " — " + extra : ""}`;
+  out.append(li);
+}
+
+/* Key order is not a number, so it is normalised away. Everything else --
+   every float, every "inf", every name -- is compared as written. */
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value).sort().map((k) => [k, canonical(value[k])]));
+  }
+  return value;
+}
+const same = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+
+const seed = await fetchSeed();
+const state = stateFromSeed(seed);
+const emitted = toConfig(state);
+
+check("the network survives the round trip", same(emitted.network, seed.config.network));
+check("the fleet survives the round trip", same(emitted.fleet, seed.config.fleet));
+check("the load survives the round trip", same(emitted.load, seed.config.load));
+
+/* Stated on their own as well, because the three above would still pass if
+   both sides had drifted together -- they read the same file. These are the
+   values w1.yaml carries, written out. */
+check("an unlimited line is emitted as \"inf\", not null",
+  emitted.network.branches.AD.limit_mw === "inf", String(emitted.network.branches.AD.limit_mw));
+check("a rated line keeps its number", emitted.network.branches.DE.limit_mw === 240.0);
+check("reactance is unrounded", emitted.network.branches.AB.reactance_pu === 0.0281);
+check("an offer keeps its cents", emitted.fleet.brighton.cost_usd_per_mwh === 10.0);
+check("the shape is 24 hours, in order",
+  emitted.load.shape.length === 24 && emitted.load.shape[18] === 1.0);
+check("firm bids carry the offer cap",
+  emitted.load.bids.B_firm.value_usd_per_mwh === seed.market.offer_cap_usd_per_mwh);
+
+/* The two fields the editor decides rather than copies. */
+check("the load source is always blocks", emitted.load.source === "blocks");
+check("the slack is written into the config as well as posted beside it",
+  emitted.network.slack === state.slack && state.slack === seed.slack);
+check("the emitted config names itself web, not case5", emitted.name === "web");
+
+/* An untouched editor overrides nothing, so the scenario's own ratings stand. */
+check("an untouched editor emits null limits, not {}", toLimits(state) === null);
+
+/* Coordinates are editor state. They are in the seed, they are in the state,
+   and they must not be in the thing that crosses the wire. */
+check("the state carries coordinates", state.buses.every((b) => Number.isFinite(b.x)));
+check("and toConfig does not emit them",
+  !JSON.stringify(emitted).includes("\"x\"") && !("coords" in emitted));
+
+const bad = results.filter((r) => !r).length;
+if (bad) {
+  document.querySelector("#diff").textContent =
+    "emitted:\n" + JSON.stringify(canonical(emitted), null, 1) +
+    "\n\nseed.config:\n" + JSON.stringify(canonical(seed.config), null, 1);
+}
+const head = document.createElement("li");
+head.className = bad ? "bad" : "ok";
+head.textContent = `${results.length - bad}/${results.length} passed`;
+out.prepend(head);
+</script>

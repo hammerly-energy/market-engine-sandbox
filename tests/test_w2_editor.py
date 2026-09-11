@@ -87,8 +87,10 @@ class TestScopeHonesty:
 #
 # What cannot be asserted from pytest is the JavaScript: there is no node in
 # this environment and adding one would be a build step, which web/ exists
-# without. So toConfig()'s round trip is checked at W2.8 through the HTTP
-# surface, and what is checked here is the data the emitter reads.
+# without. So toConfig()'s round trip runs in a browser -- web/check-emit.html,
+# W2.8 -- and what is checked here is the data the emitter reads. The two meet
+# at this file: the emitter is asserted to reproduce the seed, and the seed is
+# asserted below to be w1.yaml.
 
 SEED = Path("web/data/case5.json")
 W1_CONFIG = Path("configs/w1.yaml")
@@ -988,3 +990,282 @@ class TestTheGrammarModulesAreServed:
         it, and deliberately not reachable from the app."""
         assert client.get("/check-grammar.html").status_code == 200
         assert "check-grammar" not in client.get("/").text
+
+
+# --------------------------------------------------------------------- W2.8
+# The acceptance test for the slack lever, and it is the one assertion in W2
+# that could pass on a build where the lever does nothing at all.
+#
+# What must hold, from CLAUDE.md trap 2:
+#
+#     lambda moves.               lambda IS the LMP at the slack.
+#     the congestion split moves. PTDF[l, slack] = 0 by construction.
+#     no LMP moves.               the two changes cancel exactly.
+#     no bill moves.              a slack bug is INVISIBLE in settlement.
+#
+# The last line is why this test exists at all: every payment, revenue and
+# rent is right whichever slack is wrong, so a slack bug shows only if lambda
+# and the congestion component are asserted separately from the price.
+#
+# Two things the assertion needs and does not get for free.
+#
+# 1. pytest.approx, not equality. A different slack is a different PTDF, so it
+#    is a different LP; HiGHS factorizes different bases and the primal itself
+#    moves a few ulps. Measured here on the seed, worst over 24 hours and all
+#    five slacks: LMP 2.1e-13, payments 1.1e-10, dispatch 6.3e-12 -- the same
+#    figures CLAUDE.md's trap 2 table carries, since this is the same case5.
+#    abs=1e-9 clears the debris by three orders and would still catch a price
+#    that actually moved.
+#
+# 2. A unique optimum, asserted before it is relied on. What is slack-
+#    invariant is the SET of optimal prices; which member of it the solver
+#    hands back is not guaranteed, and under degeneracy a different PTDF can
+#    pivot to a different vertex. On a degenerate fixture this test flakes,
+#    correctly -- trap 3 against trap 2. So uniqueness is a precondition with
+#    its own tests rather than a remark.
+
+SLACK_TOL = 1e-9        # far above the measured 1.1e-10 debris
+LAMBDA_MOVE = 1.0       # far below the smallest real move, $9.94 at slack C
+
+
+def _at_bound(cleared, gen, hour):
+    return cleared["gen_status"][gen][hour] != "interior"
+
+
+class TestTheFixturesOptimumIsUnique:
+    """The precondition, measured on the seed rather than assumed of it.
+
+    Both halves are read off fields clear() already returns, which is the
+    reason they can be asserted at all: "gen_status" says where a unit sits
+    and "reduced_cost" says what one more MW is worth to it.
+
+      primal unique       every variable at a bound has a strictly non-zero
+                          reduced cost. A zero there is a second optimal
+                          dispatch at the same cost, reachable by moving that
+                          unit off its bound for free.
+
+      dual unique         per island and hour, the number of units strictly
+                          between their bounds equals 1 + the number of
+                          binding lines -- one basic variable per active row,
+                          the energy balance plus each binding limit. Fewer
+                          means a basic variable sitting exactly on a bound,
+                          which is primal degeneracy, which is multiple
+                          optimal duals, which is multiple prices.
+
+    Measured on the seed: the slimmest reduced cost at a bound is $0.057/MWh,
+    at hours 07-21. Small, and strictly non-zero, which is the whole claim.
+    """
+
+    @pytest.fixture(scope="class")
+    def cleared(self, client, seed):
+        return _clear(client, seed["config"], seed["slack"])
+
+    def test_no_unit_sits_on_a_bound_for_free(self, cleared):
+        for gen in cleared["generators"]:
+            for t in cleared["hours"]:
+                if _at_bound(cleared, gen, t):
+                    assert abs(cleared["reduced_cost"][gen][t]) > 1e-6, (gen, t)
+
+    def test_no_bid_is_partly_served(self, cleared):
+        # A bid strictly between 0 and its quantity is a basic variable too,
+        # and would have to be counted in the balance below. Every firm bid is
+        # valued at the cap, so none is.
+        for bid in cleared["bids"]:
+            for t in cleared["hours"]:
+                asked = cleared["bid_mw"][bid][t]
+                assert cleared["served"][bid][t] == pytest.approx(asked)
+
+    def test_one_basic_unit_per_active_row(self, cleared):
+        for island, buses in cleared["islands"].items():
+            gens = [g for g, bus in cleared["gen_bus"].items() if bus in buses]
+            lines = cleared["island_lines"][island]
+            for t in cleared["hours"]:
+                interior = sum(1 for g in gens if not _at_bound(cleared, g, t))
+                binding = sum(1 for l in lines if abs(cleared["mu"][l][t]) > 1e-9)
+                assert interior == 1 + binding, (island, t, interior, binding)
+
+
+class TestMovingTheSlackMovesLambdaAndNoPrice:
+    """The lever, posted the way the editor posts it: the seed's config, an
+    explicit slack, null limits. Every bus in turn, so the assertion is not
+    resting on one lucky pair."""
+
+    @pytest.fixture(scope="class")
+    def solved(self, client, seed):
+        return {bus: _clear(client, seed["config"], bus)
+                for bus in seed["config"]["network"]["buses"]}
+
+    @pytest.fixture(scope="class")
+    def base(self, solved, seed):
+        return solved[seed["slack"]]
+
+    @pytest.fixture(scope="class")
+    def congested(self, base):
+        """The hours with a binding line, which are the only ones where the
+        slack has anything to rearrange.
+
+        With nothing congested every mu is zero, so every LMP is the same
+        number and lambda is that number under whichever slack -- the split is
+        lambda plus nothing, and moving the origin of a zero moves nothing.
+        Congestion is what gives lambda somewhere to move to. The seed
+        congests at hours 07-22 and does not at 00-06 or 23, and both halves
+        are asserted below rather than one being skipped.
+        """
+        hours = [t for t in base["hours"]
+                 if any(abs(base["mu"][l][t]) > 1e-9 for l in base["lines"])]
+        assert hours, "the fixture has no congested hour, and the lever has nothing to move"
+        return hours
+
+    @pytest.mark.parametrize("bus", ["A", "B", "C", "E"])
+    def test_lambda_moves_where_a_line_binds(self, solved, base, seed, congested, bus):
+        """The half that fails on a build where the lever does nothing.
+
+        Asserted as a margin, not as inequality: two floats a ulp apart are
+        unequal and would satisfy a weaker test while the page showed no
+        change a reader could see. The smallest real move on this fixture is
+        $9.94, at slack C.
+        """
+        moved = solved[bus]
+        for t in congested:
+            assert abs(moved["lmbda"][bus][t] - base["lmbda"][seed["slack"]][t]) > LAMBDA_MOVE
+
+    @pytest.mark.parametrize("bus", ["A", "B", "C", "E"])
+    def test_lambda_does_not_move_where_nothing_binds(self, solved, base, seed, congested, bus):
+        """And the other half, which is not a weaker version of it.
+
+        An uncongested hour has one price everywhere, so lambda is that price
+        whatever the slack. A lambda that moved here would mean the slack had
+        reached something other than the accounting origin.
+        """
+        moved = solved[bus]
+        for t in set(moved["hours"]) - set(congested):
+            assert moved["lmbda"][bus][t] == pytest.approx(
+                base["lmbda"][seed["slack"]][t], abs=SLACK_TOL
+            ), t
+
+    @pytest.mark.parametrize("bus", ["A", "B", "C", "E"])
+    def test_the_congestion_split_moves_with_it(self, solved, base, congested, bus):
+        """The other side of the cancellation, and the reason no LMP moves.
+
+        In a congested hour, moving the slack must move some bus's congestion
+        component by the margin lambda moved, in the other direction.
+        """
+        moved = solved[bus]
+        for t in congested:
+            assert max(abs(moved["congestion"][b][t] - base["congestion"][b][t])
+                       for b in moved["buses"]) > LAMBDA_MOVE
+
+    @pytest.mark.parametrize("bus", ["A", "B", "C", "E"])
+    def test_no_lmp_moves(self, solved, base, bus):
+        moved = solved[bus]
+        for b in moved["buses"]:
+            for t in moved["hours"]:
+                assert moved["lmp"][b][t] == pytest.approx(
+                    base["lmp"][b][t], abs=SLACK_TOL
+                ), (b, t)
+
+    @pytest.mark.parametrize("bus", ["A", "B", "C", "E"])
+    def test_the_split_still_adds_up_to_the_price(self, solved, bus):
+        """lmp == lmbda + congestion, under whichever slack.
+
+        Not arithmetic the browser is doing -- all three are fields of the
+        return. This asserts they are consistent so a view may print any two
+        of them beside the third.
+        """
+        moved = solved[bus]
+        for b in moved["buses"]:
+            island = moved["island_of"][b]
+            for t in moved["hours"]:
+                assert moved["lmp"][b][t] == pytest.approx(
+                    moved["lmbda"][island][t] + moved["congestion"][b][t]
+                )
+
+    @pytest.mark.parametrize("bus", ["A", "B", "C", "E"])
+    @pytest.mark.parametrize("field", ["payments", "revenue", "congestion_rent",
+                                       "rent_from_duals"])
+    def test_no_settlement_figure_moves(self, solved, base, seed, bus, field):
+        moved = solved[bus]["settlement"][bus]
+        home = base["settlement"][seed["slack"]]
+        for t in solved[bus]["hours"]:
+            assert moved[field][t] == pytest.approx(home[field][t], abs=SLACK_TOL), t
+
+    @pytest.mark.parametrize("bus", ["A", "B", "C", "E"])
+    def test_the_identity_holds_under_every_slack(self, solved, bus):
+        assert _settles(solved[bus])
+
+    @pytest.mark.parametrize("bus", ["A", "B", "C", "E"])
+    def test_no_dispatch_and_no_flow_moves(self, solved, base, bus):
+        """The primal, which trap 2 says moves a few ulps and nothing more.
+
+        Worth asserting separately from the prices: a slack that reached the
+        physics would change what the generators actually did, and that is a
+        different and much worse bug than a mispriced one.
+        """
+        moved = solved[bus]
+        for gen in moved["generators"]:
+            for t in moved["hours"]:
+                assert moved["dispatch"][gen][t] == pytest.approx(
+                    base["dispatch"][gen][t], abs=SLACK_TOL
+                ), (gen, t)
+        for line in moved["lines"]:
+            for t in moved["hours"]:
+                assert moved["flows"][line][t] == pytest.approx(
+                    base["flows"][line][t], abs=SLACK_TOL
+                ), (line, t)
+
+
+class TestDeletingTheSlackIsNotAnErrorAndDeletingAnythingElseIsNotAMove:
+    """W2.6's promise, stated as acceptance rather than as mechanism.
+
+    TestRemovingTheSlackBus above asserts WHERE the slack goes. This asserts
+    the two things a visitor would notice: the edit is priced rather than
+    refused, and an unrelated deletion does not move the slack at all. A slack
+    that wandered on an unrelated edit would make lambda jump on screen for no
+    reason a reader could see.
+    """
+
+    def _without_d(self, seed):
+        return _edited(seed, lambda c: (
+            c["network"]["buses"].remove("D"),
+            c["network"]["branches"].pop("AD"),
+            c["network"]["branches"].pop("CD"),
+            c["network"]["branches"].pop("DE"),
+            c["fleet"].pop("sundance"),
+            c["load"]["bids"].pop("D_firm"),
+        ))
+
+    def test_deleting_the_slack_bus_is_priced(self, client, seed):
+        config = self._without_d(seed)
+        # What the editor posts after removeBus: its own new slack, which it
+        # keeps in step with its bus list rather than leaving stale.
+        out = _clear(client, config, config["network"]["buses"][0])
+        assert out["slack"] == "A"
+        assert _settles(out)
+
+    def test_deleting_an_unrelated_bus_does_not_move_the_slack(self, client, seed):
+        config = _edited(seed, lambda c: (
+            c["network"]["buses"].remove("E"),
+            c["network"]["branches"].pop("AE"),
+            c["network"]["branches"].pop("DE"),
+            c["fleet"].pop("brighton"),
+        ))
+        out = _clear(client, config, seed["slack"])
+        assert out["slack"] == seed["slack"] == "D"
+        assert list(out["islands"]) == ["D"]
+
+
+class TestTheEmitterRoundTripIsCheckedInABrowser:
+    """toConfig() is JavaScript and there is no JavaScript runtime here, so
+    the emitter's round trip runs in web/check-emit.html. What pytest owns is
+    the other half of the chain: the seed the emitter reads is w1.yaml, which
+    TestTheSeedIsW1AndNotACopyThatDrifted asserts field for field."""
+
+    def test_the_emitter_harness_is_served_but_not_linked(self, client):
+        assert client.get("/check-emit.html").status_code == 200
+        assert "check-emit" not in client.get("/").text
+
+    def test_the_harness_imports_the_module_the_page_imports(self, client):
+        # A harness holding its own copy of toConfig would pass forever while
+        # the editor emitted something else.
+        assert './js/state.js"' in Path("web/check-emit.html").read_text()
+        assert client.get("/js/state.js").status_code == 200
