@@ -380,3 +380,68 @@ class TestTheTransportModulesAreServed:
         r = client.get("/js/errors.js")
         assert r.status_code == 200
         assert "javascript" in r.headers["content-type"]
+
+    def test_render_is_served_as_javascript(self, client):
+        r = client.get("/js/render.js")
+        assert r.status_code == 200
+        assert "javascript" in r.headers["content-type"]
+
+
+class TestTheRenderHasEveryNumberItNeeds:
+    """W2.3 draws the network and prints three readouts. Each one is a field
+    of the clear() return, indexed -- never assembled in the browser.
+
+    What can fail silently here is ALIGNMENT. Every series is one array per
+    name, read positionally against "hours"; a series a hour shorter than
+    "hours" would print the wrong hour's price with no error anywhere, which
+    is the failure the wire format exists to prevent and therefore the one
+    worth asserting on the page's behalf.
+    """
+
+    @pytest.fixture(scope="class")
+    def cleared(self, client, seed):
+        r = client.post(
+            "/clear",
+            json={"config": seed["config"], "slack": seed["slack"], "limits": None},
+        )
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    def test_lmp_per_bus_is_aligned_to_hours(self, cleared):
+        n = len(cleared["hours"])
+        assert all(len(series) == n for series in cleared["lmp"].values())
+
+    def test_lambda_is_keyed_by_island_and_aligned_to_hours(self, cleared):
+        """Never a bare array. A shape that changed with the topology is a
+        shape the frontend would have to branch on, and it would branch wrong
+        the first time someone cut a line."""
+        n = len(cleared["hours"])
+        assert set(cleared["lmbda"]) == set(cleared["islands"])
+        assert all(len(series) == n for series in cleared["lmbda"].values())
+
+    def test_the_residual_is_per_island_and_per_hour(self, cleared):
+        """Summing either dimension would let a positive residual cancel a
+        negative one, so the page reads one number per island per hour."""
+        n = len(cleared["hours"])
+        assert set(cleared["settlement"]) == set(cleared["islands"])
+        for ledger in cleared["settlement"].values():
+            assert len(ledger["residual"]) == n
+
+    def test_the_residual_the_page_prints_is_zero_in_every_hour(self, cleared):
+        """The claim the whole repo rests on, asserted at the page's own
+        boundary: what renderIslands puts on screen is ~0, hour by hour."""
+        for ledger in cleared["settlement"].values():
+            assert all(abs(r) < 1e-6 for r in ledger["residual"])
+
+    def test_lambda_is_the_lmp_at_the_slack(self, cleared):
+        """Why an island is named by its slack, asserted rather than assumed.
+        The page prints the name next to the number and the two must mean the
+        same thing."""
+        for home, series in cleared["lmbda"].items():
+            assert series == pytest.approx(cleared["lmp"][home])
+
+    def test_every_bus_the_map_draws_has_a_price(self, cleared, seed):
+        """The map is drawn from editor state and the prices come from the
+        response. They are keyed the same, so the readout cannot list a bus
+        the picture does not show."""
+        assert set(cleared["lmp"]) == set(seed["config"]["network"]["buses"])

@@ -14,6 +14,42 @@
     unit commitment, no storage, no reserves.
   </p>
 
+  <section class="panel figure">
+    <h2>Network</h2>
+    <svg id="network" role="img"
+         aria-label="The five-bus network: buses and the branches between them"></svg>
+    <p class="caption" id="network-caption">
+      Buses and branches as the editor declares them. Colour is identity, not
+      price — it matches the figures in <code>src/viz/</code>. The ringed bus
+      is the slack, which is an accounting origin: no LMP, dispatch, flow or
+      settlement figure depends on which bus it is.
+    </p>
+  </section>
+
+  <section class="panel" data-results>
+    <h2>Prices</h2>
+    <div id="prices"></div>
+    <p class="caption">
+      LMP at each bus for the hour shown. Every number is a field of the
+      <code>clear()</code> return, rounded — nothing on this page is computed
+      in JavaScript.
+    </p>
+  </section>
+
+  <section class="panel" data-results>
+    <h2>Islands and the settlement residual</h2>
+    <div id="islands"></div>
+    <p class="caption">
+      One energy balance, one λ and one settlement identity per island, per
+      hour. λ is the LMP at that island's slack. The residual is congestion
+      rent measured from the money — <code>payments − revenue</code> — minus
+      the same rent derived from the duals, <code>−Σ μ·f</code>. Two
+      independent routes to one number; it is displayed rather than hidden
+      because a visible <code>≈ 0</code> is the claim the rest of this rests
+      on.
+    </p>
+  </section>
+
   <section class="panel">
     <h2>Editor state</h2>
     <dl class="kv" id="editor"></dl>
@@ -23,11 +59,6 @@
     <h2>Against the server caps</h2>
     <dl class="kv" id="limits"></dl>
     <p class="status" id="status">Contacting server…</p>
-  </section>
-
-  <section class="panel">
-    <h2>What came back</h2>
-    <dl class="kv" id="response"></dl>
   </section>
 
   <section class="panel">

@@ -149,3 +149,121 @@ button:hover {
 .log li[data-state="ok"] { color: var(--hue-2); }
 .log li[data-state="error"] { color: var(--flow-pos); }
 .log li[data-state="muted"] { color: var(--ink-muted); }
+
+/* -------------------------------------------------------- W2.3, the render
+   The publication register holds on screen: sentence case, units once on the
+   column header, a recessive grid, no bold anywhere. Emphasis comes from
+   position and whitespace. */
+
+/* 496 px of drawing plus the panel's own padding. render.js sizes its text as
+   a fraction of the viewBox span against that same 496, so the two numbers
+   have to agree: widen this and the labels grow off the hierarchy. */
+.figure { max-width: calc(496px + 2.2rem + 2px); }
+
+#network {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.wire {
+  fill: none;
+  stroke: var(--ink-muted);
+}
+
+/* Branch and bus names are struck through by the lines they sit on, so they
+   carry a surface-coloured halo -- the SVG spelling of the annotation bbox
+   the print figures use. Colour and paint order, never weight.
+
+   Sizes are NOT set here. SVG text is in user units, so a font-size in this
+   file renders at whatever the viewBox happens to be, and the viewBox is
+   fitted to a topology the editor can change. render.js sets every size. */
+.wire-label,
+.bus-label {
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-linejoin: round;
+  text-anchor: middle;
+  font-family: inherit;
+  font-weight: 400;
+}
+
+.wire-label {
+  fill: var(--ink-muted);
+  dominant-baseline: middle;
+}
+
+.bus-label { fill: var(--ink); }
+
+.disc { stroke: var(--surface); }
+
+/* The slack. A ring, not a fill: the slack changes nothing about the bus's
+   identity and must not read as a different bus. */
+.slack-ring {
+  fill: none;
+  stroke: var(--ink-2);
+}
+
+.caption {
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+  margin: 0.75rem 0 0;
+}
+
+.caption code,
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  color: var(--ink);
+}
+
+table {
+  border-collapse: collapse;
+  font-size: var(--type-annot);
+  font-variant-numeric: tabular-nums;
+  width: 100%;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.2rem 0.9rem 0.2rem 0;
+  border-bottom: 1px solid var(--grid);
+  white-space: nowrap;
+}
+
+th {
+  font-weight: 400;
+  color: var(--ink-2);
+}
+
+td:last-child,
+th:last-child { padding-right: 0; }
+
+.num { text-align: right; }
+
+.swatch {
+  display: inline-block;
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 50%;
+  margin-right: 0.45em;
+  vertical-align: baseline;
+}
+
+/* Prices that no longer describe the network on screen. Recessive, and
+   labelled -- kept rather than blanked, because an empty table is a
+   different and false claim. */
+[data-results][data-stale] { opacity: 0.45; }
+
+[data-results][data-stale] h2::after {
+  content: " — stale, the last solve was refused";
+  color: var(--flow-pos);
+  font-size: var(--type-annot);
+}
+
+@media (max-width: 32rem) {
+  .panel { max-width: none; }
+  th, td { padding-right: 0.5rem; }
+}

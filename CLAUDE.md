@@ -338,6 +338,45 @@ screen, they hold with three amendments:
 Colour is assigned by identity in a fixed order and shared between the static
 figures and the web views, so a bus is the same hue in the PDF and on screen.
 
+### Colour on the network map: identity now, a price scale at W3
+
+**W2.3's bus colours are a placeholder and are scheduled to change. The stage
+is W3**, whose first view is the network map with *buses coloured by LMP*.
+Today `web/js/render.js` fills each disc with its Okabe-Ito identity hue,
+which proves a bus is the same object it is in `src/viz/`, and says nothing
+about its price. That is correct for a minimal render and wrong for a
+finished map.
+
+The change is not a swap of one palette for another, because **one mark
+cannot carry both channels**, and identity is not disposable — it is what
+makes a bus recognisable across the merit-order stack, the flow chart and the
+24-hour heatmap sitting next to it. Three questions fall out, and they are
+scoped to the top of W3, not to the middle of it:
+
+- **Which channel gets the fill.** Either the disc fill becomes the price and
+  identity retreats to the ring, the label, or the disc's outline — or the
+  fill stays identity and price is carried by a second encoding entirely.
+  Whichever way it goes, the map must not be the one view where a bus is a
+  different colour from every other view.
+- **Sequential or diverging, and of what.** LMP *level* is sequential, one hue
+  light-to-dark — except that prices go negative, and a sequential ramp
+  through zero hides the sign change that is the most interesting thing on the
+  screen. The *congestion component* `LMP − λ` is natively diverging about
+  zero, two hues with a neutral midpoint, and it is already its own W3 view.
+  Colouring the map by the level and the split view by the component is one
+  defensible answer; so is colouring both by the component. Pick one and say
+  why.
+- **What the domain is fixed to, which is the trap.** A scale rescaled per
+  hour or per solve makes the colour move when only the scale moved, and a
+  visitor dragging a limit will read that as a price change. It is the same
+  failure as a UI that animates prices sliding when the slack changes (trap
+  2), arriving through the legend instead. A domain fixed across the day —
+  or across the session, with the bounds printed — is what keeps the colour
+  comparable to the colour a second ago.
+
+A legend is mandatory the moment colour stops meaning identity: an
+unlabelled ramp is a picture of a number the reader cannot read off.
+
 ### What the engine already refuses
 
 Measured against the M3 case5 scenario, not assumed. This table exists so W1
@@ -671,7 +710,7 @@ is demonstrably true.
 | **W0** | Serve one solve | FastAPI in `src/api/`, wrapping `clear()`. One `POST /clear` taking a scenario config as JSON. Two things that are not transport and must land here: a **wire format** — `clear()` keys dispatch, flows, μ and lmp by `(name, hour)` tuples, which JSON cannot express — and **input bounds**, because a public URL means a hostile POST body and a live HiGHS solve behind one is a resource-exhaustion vector. Cap buses, branches, generators, hours and body size; reject, don't truncate. | The published case5 LMPs come back over HTTP and match the in-process `clear()` result field for field, asserted as a test. The API adds no arithmetic. An oversized or malformed body returns a named 4xx, never a traceback and never a solve. | 1 day |
 | **W1** | Make the engine total | Less is missing here than it looks. Measured, not assumed: islanding, an isolated bus, a mistyped slack, a zero-reactance branch and duplicate names **already** raise clean named `ValueError`s — `ptdf.py:48` and `topology.py:59` were built for exactly this. A connected bus with no generator and no load prices correctly. Parallel branches solve correctly. The one real gap is **infeasibility**: too little capacity for the load returns a bare `RuntimeError: solve not optimal: infeasible` from `dispatch.py:235`, which is not a sentence anyone can show a visitor. | **Every input the editor can produce returns either a priced solve or one named, displayable reason.** The fuzz test over random topologies is the deliverable, not the `RuntimeError` fix — the fix is an hour and the fuzz test is what proves *What the engine already refuses* is complete rather than merely the cases someone thought of. The harder half is the three formulation questions under **Purpose**: what an island means, what the engine says when load cannot be served, and what happens when the slack is deleted. Each has more than one defensible answer. Pick one each and write down why — a refusal chosen deliberately is a design; a refusal inherited from `ptdf.py` is an accident. | 1.5 days |
 | **W2** | The editor | The eight levers, against the live engine: line limit, peak load per bus, add/remove bus, connect/disconnect line, add/remove generator, edit generator capacity and marginal cost, hour 1–24, slack bus. | Every lever re-solves and redraws. **Deleting the slack bus moves the dropdown, it does not 422** — the editor posts an explicit `slack` and owns keeping it in step with the bus list, and the engine refusing a slack that is not a bus is the check that catches it failing to. The slack dropdown is the acceptance test, **on a fixture with a unique optimum**: moving it must rearrange the λ/congestion split while every LMP and every settlement figure stays bit-identical. A UI that shows prices moving with the slack has a bug in it. Run that assertion on a degenerate fixture and it will flake, correctly — see trap 2. | 1.5 weeks |
-| **W3** | The views | Network map with buses coloured by LMP; LMP split into λ + congestion; merit-order stack; settlement ledger with the residual; line flows against limits; live generation by unit; 24-hour heatmap. Three of these need fields `clear()` does not yet return — **add them in W0, not mid-W3**: a per-bus `congestion[bus, hour]`, which `pricing.py` already computes and then discards; per-generator `cost` and `pmax`, without which no merit-order stack can be drawn; and per-generator **status** (`off` / `interior` / `at_max`) with its `headroom` and `reduced_cost`. Status, *not* "the marginal unit" — that field was written at W0 and replaced within the hour, because under congestion there is no single marginal unit and three of case5's five buses have an LMP equal to no offer at all. Bus *coordinates* are not an engine concern at all — they are editor state, and they belong to W2. | Every number on screen is traceable to a field of the `clear()` return. Nothing is recomputed in JavaScript — the browser formats and draws, it does not do market arithmetic. The residual is displayed, not hidden, because a visible `≈ 0` is the claim the whole repo rests on. | 1 week |
+| **W3** | The views | Network map with buses coloured by LMP — which is where W2.3's identity colouring is replaced, and the three questions under *Colour on the network map* are settled at the top of this milestone, not mid-view; LMP split into λ + congestion; merit-order stack; settlement ledger with the residual; line flows against limits; live generation by unit; 24-hour heatmap. Three of these need fields `clear()` does not yet return — **add them in W0, not mid-W3**: a per-bus `congestion[bus, hour]`, which `pricing.py` already computes and then discards; per-generator `cost` and `pmax`, without which no merit-order stack can be drawn; and per-generator **status** (`off` / `interior` / `at_max`) with its `headroom` and `reduced_cost`. Status, *not* "the marginal unit" — that field was written at W0 and replaced within the hour, because under congestion there is no single marginal unit and three of case5's five buses have an LMP equal to no offer at all. Bus *coordinates* are not an engine concern at all — they are editor state, and they belong to W2. | Every number on screen is traceable to a field of the `clear()` return. Nothing is recomputed in JavaScript — the browser formats and draws, it does not do market arithmetic. The residual is displayed, not hidden, because a visible `≈ 0` is the claim the whole repo rests on. | 1 week |
 | **W4** | The frame and the deploy | Narrative scroll, one section per engine milestone, each with its live figure and a link to the source that implements it. Equations rendered next to the code. Scope statement. Deployed. | A stranger can reach it at a URL, rewire the network, and leave understanding that λ is a dual variable. The scope statement is on the page, not in a footer. | 3 days |
 
 #### W2, phase by phase
@@ -686,7 +725,7 @@ of 10*.
 | **W2.0** ✓ | Serve the page | 0.5 d | `web/` skeleton, plain ES modules, no toolchain. `StaticFiles` mounted at `/` **registered last**, or the mount shadows `/clear` and the failure looks like a frontend bug for an afternoon |
 | **W2.1** | Editor state | 1 d | The single source of truth the eight levers mutate; nothing else in the frontend holds state. `{buses: [{name, x, y}], branches, fleet, bids, shape, slack, hour, limits}`. **Coordinates are editor state and never cross the wire.** `toConfig()` emits w1.yaml's exact dict and **always `load.source: blocks`**. The **defaults policy** is written down, because a default is a market assumption wearing a UI detail's clothes. Client-side bound check against `/limits`, refusing before it posts — a courtesy, not the defence |
 | **W2.2** | Transport | 0.5 d | `postClear(state)`, and **request coalescing**: a monotonic id per request, stale responses dropped. A drag fires many solves and they return out of order, so the last response is not the last request. This is *not* debouncing the price — the flicker at a degenerate breakpoint is kept and shown (trap 3). Error surface switches on the stable code and prints `detail` verbatim |
-| **W2.3** | Minimal render | 1 d | Enough feedback to prove a lever worked, and no more: hand-written SVG buses and branches, a readout of LMP per bus, λ per island, and the settlement residual. Formatted only. **The seven views are W3 — do not build them here** |
+| **W2.3** | Minimal render | 1 d | Enough feedback to prove a lever worked, and no more: hand-written SVG buses and branches, a readout of LMP per bus, λ per island, and the settlement residual. Formatted only. Bus colour is **identity, and a placeholder for W3's price scale** — see *Colour on the network map*. **The seven views are W3 — do not build them here** |
 | **W2.4** | The five non-drag levers | 1 d | Line limit → the `limits` override, which is an argument to `clear()` and not a config edit. Peak load per bus, generator capacity, marginal cost. Hour 1–24 indexes the returned arrays and does **not** re-solve; the day comes back whole |
 | **W2.5** | The three drag levers | 2 d | Add/remove bus, connect/cut line, add/remove generator. Hit-testing by hand in SVG. **This is where the plan overruns.** Checkpoint at the end of its second day: if drag is still fighting you, adopt a framework for the editor alone. That retreat is correct on day 2 and worthless on day 9 |
 | **W2.6** | The slack lever | 0.5 d | A dropdown over the bus list, posted explicitly on every request. **Deleting the slack bus moves the dropdown; it does not 422.** The editor owns keeping slack in step with its bus list, and the engine's refusal of a non-bus slack is the check that catches it failing to |

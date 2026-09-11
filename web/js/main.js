@@ -1,19 +1,27 @@
-/* W2.2: the state of W2.1, posted, with the transport rules visible.
+/* W2.3: the state of W2.1, posted over the transport of W2.2, and DRAWN.
  *
- * What this page proves is the seam, not a view -- the network drawing, the
- * LMP readout and the residual are W2.3, and building them here would make
- * a transport bug look like a rendering bug. So the evidence is the traffic
- * itself: which request ids were issued, which one was applied, which were
+ * What lands here is the minimum that proves a lever worked -- the network,
+ * LMP per bus, lambda per island, the settlement residual -- and no more.
+ * The seven views are W3. The traffic log below stays because it is W2.2's
+ * evidence: which request ids were issued, which one was applied, which were
  * dropped as superseded, and what the failure surface says when the server
- * refuses.
+ * refuses. A rendering built on top of an untrustworthy transport would make
+ * every transport bug look like a rendering bug.
  *
  * No number below is computed. Everything shown is a field of the clear()
  * return, counted or formatted -- the boundary rule.
+ *
+ *     editor state ----> renderNetwork      topology, drawn immediately
+ *          |
+ *        submit() --> solve --> cleared --> renderPrices, renderIslands
+ *                        \                  markStale(false)
+ *                         \--> error/stale -> markStale(true), numbers kept
  */
 
 import { bodyFor, createSolver, getLimits } from "./api.js";
 import { describe, summarize } from "./errors.js";
 import { checkBounds, fetchSeed, stateFromSeed } from "./state.js";
+import { markStale, renderIslands, renderNetwork, renderPrices } from "./render.js";
 
 const status = document.querySelector("#status");
 const log = document.querySelector("#log");
@@ -67,7 +75,9 @@ async function submit() {
   if (outcome.status === "superseded") {
     /* Not a failure. A newer request already landed, so this answer is about
        a network the visitor has edited away from. Dropped, and said so --
-       the drop is visible here because this phase is about the drop. */
+       the drop is visible here because this phase is about the drop. The
+       readouts are NOT marked stale: a fresher answer is already applied or
+       on its way, and flickering "stale" through a drag would cry wolf. */
     note(outcome.id, "superseded, dropped", "muted");
     return;
   }
@@ -76,24 +86,36 @@ async function submit() {
     const { code, heading, detail, fix } = describe(outcome.error);
     say([heading, "—", detail, fix].filter(Boolean).join(" "), "error");
     note(outcome.id, `refused: ${code}`, "error");
+    /* The map has moved and the prices have not. Kept and marked, not
+       cleared: a blank table reads as "no prices exist", which is a
+       different and false claim. */
+    markStale(true);
     return;
   }
 
   const cleared = outcome.result;
   note(outcome.id, "applied", "ok");
-  say(
-    `Cleared. ${cleared.buses.length} buses, ${cleared.lines.length} lines, ` +
-      `${cleared.hours.length} hours, ${Object.keys(cleared.islands).length} island(s), ` +
-      `slack ${cleared.slack}.`,
+
+  /* The hour the editor is on indexes every returned array. The day comes
+     back whole, so moving the hour (W2.4) re-reads these and does not
+     re-solve. Guarded because the editor can hold an hour past the end of a
+     shape it has since shortened. */
+  const hour = Math.min(editor.hour, cleared.hours.length - 1);
+
+  renderPrices(
+    document.querySelector("#prices"),
+    cleared,
+    hour,
+    editor.buses.map((bus) => bus.name),
   );
-  rows(document.querySelector("#response"), [
-    ["Slack the engine used", cleared.slack],
-    ["Islands", Object.keys(cleared.islands).join(", ")],
-    ["Hours returned", cleared.hours.length],
-    ["Series keyed by bus", Object.keys(cleared.lmp).length],
-    ["Series keyed by line", Object.keys(cleared.flows).length],
-    ["Series keyed by generator", Object.keys(cleared.dispatch).length],
-  ]);
+  renderIslands(document.querySelector("#islands"), cleared, hour);
+  markStale(false);
+
+  say(
+    `Cleared hour ${hour + 1} of ${cleared.hours.length}. ` +
+      `${cleared.buses.length} buses, ${cleared.lines.length} lines, ` +
+      `${Object.keys(cleared.islands).length} island(s), slack ${cleared.slack}.`,
+  );
 }
 
 try {
@@ -108,6 +130,10 @@ try {
 } catch (err) {
   say(summarize(err), "error");
 }
+
+/* Drawn from editor state, before anything is posted. Topology does not wait
+   for a solve -- see render.js. W2.5's drags will call this on every move. */
+renderNetwork(document.querySelector("#network"), editor);
 
 rows(document.querySelector("#editor"), [
   ["Buses", editor.buses.map((bus) => bus.name).join(", ")],
