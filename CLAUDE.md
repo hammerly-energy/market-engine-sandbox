@@ -462,9 +462,15 @@ Three properties that make it safe to adopt:
   `d < Dmax` as a hard failure and loses nothing.
 - **Nothing downstream changes.** `pricing.py` and `src/network/` are untouched;
   the LMP assembly does not know what an injection is made of.
-- **M0–M4 must stay bit-identical.** With `v` above every offer the block is
-  always served in full, so every existing number is unchanged. That equality
-  is the acceptance test for the change, not a nice-to-have.
+- **M0–M4 must not move.** With `v` above every offer the block is always
+  served in full, so every existing number is unchanged. That equality is the
+  acceptance test for the change, not a nice-to-have.
+
+  How much of it is *bitwise* was measured at W2.6, m4.yaml against w1.yaml:
+  **every LMP is exactly equal, and dispatch differs by 2.3e-13.** Adding a
+  demand variable is a different LP, so the primal is free to land a few ulps
+  away even where the prices do not — which is why the test asserts with
+  `pytest.approx` and is right to. See trap 2 for the general statement.
 
 The one place it breaks quietly is settlement: `payments` must be computed on
 **served** quantity `Σ_k d[i,k,t]`, not on declared load. Wrong, and the
@@ -494,9 +500,10 @@ write-up is exactly how a stale constant ends up looking like data.
 `value_usd_per_mwh = None` means inelastic and keeps demand on the right-hand
 side, which is how the data model, the config path and the tests could land
 green *before* the LP changes. `configs/w1.yaml` is the control: it restates
-`configs/m4.yaml` as priced bids and must clear to the same numbers bit for
-bit, today because the price is ignored and afterwards because a bid at the
-cap outbids every generator.
+`configs/m4.yaml` as priced bids and must clear to the same numbers — every
+LMP bitwise, the primal to solver tolerance, as measured above — today
+because the price is ignored and afterwards because a bid at the cap outbids
+every generator.
 
 ### W1 decision: what an island means
 
@@ -598,8 +605,11 @@ Three properties, all tested:
 - **It fires only when the named slack is actually gone.** Deleting an
   unrelated bus does not move it — a slack that wandered would make λ jump on
   screen for no reason a reader could see.
-- **No price moves.** Every LMP is bit-identical across the fallback; only λ
-  and the congestion split change, and they cancel exactly.
+- **No price moves.** Only λ and the congestion split change, and they cancel.
+  Not *bitwise*, though: the fallback lands on a different slack, so it is a
+  different PTDF and a different LP, and the cancellation leaves float64
+  debris of order 1e-13. Assert it with `pytest.approx`, and see trap 2 for
+  the measurement and the tolerance.
 
 ### W1 deliverable: the topology fuzz
 
@@ -737,7 +747,7 @@ is demonstrably true.
 |---|---|---|---|---|
 | **W0** | Serve one solve | FastAPI in `src/api/`, wrapping `clear()`. One `POST /clear` taking a scenario config as JSON. Two things that are not transport and must land here: a **wire format** — `clear()` keys dispatch, flows, μ and lmp by `(name, hour)` tuples, which JSON cannot express — and **input bounds**, because a public URL means a hostile POST body and a live HiGHS solve behind one is a resource-exhaustion vector. Cap buses, branches, generators, hours and body size; reject, don't truncate. | The published case5 LMPs come back over HTTP and match the in-process `clear()` result field for field, asserted as a test. The API adds no arithmetic. An oversized or malformed body returns a named 4xx, never a traceback and never a solve. | 1 day |
 | **W1** | Make the engine total | Less is missing here than it looks. Measured, not assumed: islanding, an isolated bus, a mistyped slack, a zero-reactance branch and duplicate names **already** raise clean named `ValueError`s — `ptdf.py:48` and `topology.py:59` were built for exactly this. A connected bus with no generator and no load prices correctly. Parallel branches solve correctly. The one real gap is **infeasibility**: too little capacity for the load returns a bare `RuntimeError: solve not optimal: infeasible` from `dispatch.py:235`, which is not a sentence anyone can show a visitor. | **Every input the editor can produce returns either a priced solve or one named, displayable reason.** The fuzz test over random topologies is the deliverable, not the `RuntimeError` fix — the fix is an hour and the fuzz test is what proves *What the engine already refuses* is complete rather than merely the cases someone thought of. The harder half is the three formulation questions under **Purpose**: what an island means, what the engine says when load cannot be served, and what happens when the slack is deleted. Each has more than one defensible answer. Pick one each and write down why — a refusal chosen deliberately is a design; a refusal inherited from `ptdf.py` is an accident. | 1.5 days |
-| **W2** | The editor | The eight levers, against the live engine: line limit, peak load per bus, add/remove bus, connect/disconnect line, add/remove generator, edit generator capacity and marginal cost, hour 1–24, slack bus. | Every lever re-solves and redraws. **Deleting the slack bus moves the dropdown, it does not 422** — the editor posts an explicit `slack` and owns keeping it in step with the bus list, and the engine refusing a slack that is not a bus is the check that catches it failing to. The slack dropdown is the acceptance test, **on a fixture with a unique optimum**: moving it must rearrange the λ/congestion split while every LMP and every settlement figure stays bit-identical. A UI that shows prices moving with the slack has a bug in it. Run that assertion on a degenerate fixture and it will flake, correctly — see trap 2. | 1.5 weeks |
+| **W2** | The editor | The eight levers, against the live engine: line limit, peak load per bus, add/remove bus, connect/disconnect line, add/remove generator, edit generator capacity and marginal cost, hour 1–24, slack bus. | Every lever re-solves and redraws. **Deleting the slack bus moves the dropdown, it does not 422** — the editor posts an explicit `slack` and owns keeping it in step with the bus list, and the engine refusing a slack that is not a bus is the check that catches it failing to. The slack dropdown is the acceptance test, **on a fixture with a unique optimum**: moving it must rearrange the λ/congestion split while every LMP and every settlement figure stays put — to solver tolerance, not bitwise, because a different slack is a different LP; trap 2 has the measurement and the tolerance. A UI that shows prices moving with the slack has a bug in it. Run that assertion on a degenerate fixture and it will flake, correctly — see trap 2. | 1.5 weeks |
 | **W3** | The views | **The page frame is decided first, before any view is coded** — the single 60ch column that carries four panels does not carry eleven, and a heatmap needs 24 columns of horizontal room a text measure will not give it. Retrofitting a grid under seven hand-coded views is the expensive order to do this in, and it is the same argument as settling colour at the top rather than mid-view. Then: network map with buses coloured by LMP — which is where W2.3's identity colouring is replaced, and the three questions under *Colour on the network map* are settled at the top of this milestone, not mid-view; LMP split into λ + congestion; merit-order stack; settlement ledger with the residual; line flows against limits; live generation by unit; 24-hour heatmap. Three of these need fields `clear()` does not yet return — **add them in W0, not mid-W3**: a per-bus `congestion[bus, hour]`, which `pricing.py` already computes and then discards; per-generator `cost` and `pmax`, without which no merit-order stack can be drawn; and per-generator **status** (`off` / `interior` / `at_max`) with its `headroom` and `reduced_cost`. Status, *not* "the marginal unit" — that field was written at W0 and replaced within the hour, because under congestion there is no single marginal unit and three of case5's five buses have an LMP equal to no offer at all. Bus *coordinates* are not an engine concern at all — they are editor state, and they belong to W2. | Every number on screen is traceable to a field of the `clear()` return. Nothing is recomputed in JavaScript — the browser formats and draws, it does not do market arithmetic. The residual is displayed, not hidden, because a visible `≈ 0` is the claim the whole repo rests on. Two views can be read against each other without scrolling between them, which is what the frame is for. | 1 w + 0.5 d |
 | **W4** | The frame and the deploy | Narrative scroll, one section per engine milestone, each with its live figure and a link to the source that implements it. Equations rendered next to the code. Scope statement. Deployed. | A stranger can reach it at a URL, rewire the network, and leave understanding that λ is a dual variable. The scope statement is on the page, not in a footer. | 3 days |
 
@@ -759,7 +769,7 @@ of 10*.
 | **W2.5** | The editing grammar | 2.5 d | Add/remove bus, connect/cut line, add/remove generator. Drag a bus body to move it; every structural edit is an **armed mode** — press a button, then click the target. Hit-testing by hand in SVG. **This is where the plan overruns.** Checkpoint at the end of its second day: if drag is still fighting you, adopt a framework for the editor alone. That retreat is correct on day 2 and worthless on day 9. Three things ride along because they are the same hit-testing and the same state: the **armed-state readout**, the **keyboard path** (focus and activate, never a shortcut), and **undo**, pulled forward from W2.7 — see *W2 decision: the editing grammar* |
 | **W2.6** | The slack lever | 0.5 d | A dropdown over the bus list, posted explicitly on every request. **Deleting the slack bus moves the dropdown; it does not 422.** The editor owns keeping slack in step with its bus list, and the engine's refusal of a non-bus slack is the check that catches it failing to |
 | **W2.7** | The register fixes | 0.5 d | Three small things a usability review found, batched so the page is re-rendered and looked at once rather than three times. **Wire labels get their own screen token** — `--ink-muted` is 3.46:1 on the surface and branch names are load-bearing, not decorative; **the hour slider is visually distinct** from the four that re-solve, because that difference currently lives only in prose; **results sit above the levers**, so a moved slider does not land its answer below the fold. Half a day because CLAUDE.md requires rendering and inspecting each one, and moving one label routinely creates a collision somewhere else |
-| **W2.8** | Acceptance tests | 1 d | The slack assertion, **on a fixture whose optimum is verified unique first**: moving the slack rearranges λ and the congestion split while every LMP, payment, revenue and rent stays bit-identical. On a degenerate fixture it flakes, correctly — trap 2 against trap 3. Plus the delete-the-slack test, and `toConfig()` round-tripping to w1.yaml's numbers bit for bit |
+| **W2.8** | Acceptance tests | 1 d | The slack assertion, **on a fixture whose optimum is verified unique first**: moving the slack rearranges λ and the congestion split while every LMP, payment, revenue and rent stays put. **`pytest.approx(abs=1e-9)`, not equality** — a different slack is a different LP and the cancellation leaves ~1e-13 on prices and ~1e-10 on payments (trap 2). Assert the other half too, that λ *moved* by a margin outside that tolerance, or the test passes on a build where the lever does nothing. On a degenerate fixture it flakes, correctly — trap 2 against trap 3. Plus the delete-the-slack test, and `toConfig()` round-tripping to w1.yaml's numbers bit for bit |
 | **W2.9** | The degeneracy decision | 0.5 d | Detect degeneracy and return a flag, so a view can say `λ ∈ [20, 35]` where the repo's own tests would — or accept that the site shows one arbitrary member of the set without comment. **Decided before W3, not during.** If it is "detect", that is an engine change and it is not free: scoped here, built at the top of W3 |
 
 Two things W2 does not touch: the seven views (W3), and market arithmetic in
@@ -857,14 +867,54 @@ later.
 
    The mechanism: `f = PTDF·inj` and `Σ inj = 0`, so the reference term
    `PTDF[l, s']·Σ inj` vanishes. Different matrix, identical feasible set,
-   identical dispatch and identical μ. The two matrices agree only *on* the
-   balance hyperplane, so the Lagrangian splits the same total price
+   identical dispatch and identical μ — identical in real arithmetic; see
+   below for what that is worth in float64. The two matrices agree only *on*
+   the balance hyperplane, so the Lagrangian splits the same total price
    differently between the balance row and the flow rows — λ absorbs the
    difference, and the sum is physics.
 
    Consequence for testing: a slack bug is **invisible in settlement**. Every
    bill is right whichever slack is wrong. It shows only if λ and the
    congestion component are asserted separately.
+
+   **"Identical" here is a statement about real arithmetic. In float64 it is
+   a tolerance, and this file said "bit-identical" until W2.6 measured it.**
+   Changing the slack changes the LP's *coefficients* — a PTDF relative to a
+   different origin is a different matrix, correctly so — and HiGHS then
+   factorizes different bases and pivots on different numbers. The primal
+   moves before any price is assembled. Measured, case5, slack A against
+   slack D, worst over all 24 hours:
+
+   ```
+   dispatch   6.8e-13      the primal itself, not just the duals
+   flows      2.2e-12
+   mu         3.9e-13
+   lmbda      22.97        <- the real move, and the only intended one
+   LMP        1.7e-13
+   payments   9.8e-11
+   ```
+
+   Two things to take from that. First, **the solver is deterministic and the
+   input is what changed**: the same scenario at the same slack, solved twice,
+   gives bitwise-equal LMPs. Second, the cancellation is *arithmetic*, not
+   structural — λ moves +$23 and `Σ PTDF·μ` moves −$23, summed in a different
+   order over different products at intermediate magnitudes around $30, where
+   one ulp is ~7e-15. Debris of order 1e-13 is the expected size of that
+   cancellation, not a symptom of anything.
+
+   None of this is HTTP's doing: the same comparison in-process gives the identical
+   figure to every digit, and the JSON round trip is exactly lossless — Python
+   emits shortest-round-trip float reprs and `wire.encode` copies floats
+   without touching them.
+
+   So assert this invariance with `pytest.approx`, and pick the tolerance to
+   sit far above the debris and far below any real move: `abs=1e-9` clears the
+   measured 9.8e-11 by three orders and would still catch a price that
+   actually moved. **And assert the other half too** — that λ *did* move, by a
+   margin outside that tolerance. A test that only checks "no LMP moved"
+   passes on a build where the slack lever does nothing at all. The repo's
+   tests already work this way (`test_w1_islands.py:307`, `:323`); it was only
+   the prose here that claimed bitwise.
 
    **The precondition is a unique optimum, and it is not decorative.** What is
    slack-invariant is the *set* of optimal prices, because the shift identity

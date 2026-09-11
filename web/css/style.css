@@ -363,9 +363,38 @@ th:last-child { padding-right: 0; }
   outline-offset: 2px;
 }
 
+/* W2.6, the slack chooser. It spans the rail and the readout columns, because
+   a bus name is the value and a position on a scale means nothing here.
+
+   THE CONTROL IS LEFT NATIVE. Only type, colour and the cursor are set; the
+   border and the chevron are the platform's, the same as the armed-mode
+   buttons above the map. Restyling it would mean appearance: none and a
+   hand-drawn chevron -- more ink, drawn by this file, to look like the thing
+   it replaced, on the one control whose affordance is the chevron. */
+.lever select {
+  grid-column: 2 / -1;
+  justify-self: start;
+  min-width: 9ch;
+  font: inherit;
+  font-size: var(--type-annot);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.lever select:focus-visible {
+  outline: 1px solid var(--ink-2);
+  outline-offset: 2px;
+}
+
+.lever select:disabled {
+  color: var(--ink-muted);
+  cursor: default;
+}
+
 @media (max-width: 32rem) {
   .lever { grid-template-columns: 1fr 6ch; }
   .lever-name { grid-column: 1 / -1; }
+  .lever select { grid-column: 1 / -1; }
 }
 
 /* --------------------------------------------------- W2.5, the editing grammar

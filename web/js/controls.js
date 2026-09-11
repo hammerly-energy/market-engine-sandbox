@@ -7,6 +7,11 @@
  *   generator cost -> gen.cost_usd_per_mwh
  *   hour 1-24      -> state.hour, WHICH DOES NOT RE-SOLVE
  *
+ * and, added at W2.6, the sixth:
+ *
+ *   slack bus      -> state.slack, a dropdown over the bus list, posted
+ *                     explicitly on every request
+ *
  * THE HOUR IS THE ONE THAT IS DIFFERENT AND IT IS THE POINT OF THIS PHASE.
  * clear() returns the whole day -- every series is one array per name aligned
  * to `hours` -- so moving the hour indexes arrays that are already in the
@@ -122,6 +127,42 @@ function slider({ name, min, max, step, value, format, onInput, swatch = null })
   };
 }
 
+/* One labelled chooser. Same row geometry as a slider, and the same sync
+   contract -- sync() rewrites the selection from state without rebuilding the
+   element, because a <select> rebuilt under an open popup closes it. */
+function chooser({ name, options, value, onChange }) {
+  const row = el("div", { class: "lever" });
+  const label = el("label", { class: "lever-name" }, name);
+  const select = el("select", { "aria-label": name });
+
+  const fill = (chosen) => {
+    select.replaceChildren();
+    /* A value that is not in the list still gets an option, disabled and
+       selected. Only reachable with no buses left, where there is nothing
+       honest to move the slack to -- and a select that silently displayed
+       some other bus would be the editor lying about what it will post. */
+    if (chosen !== null && !options.includes(chosen)) {
+      const orphan = el("option", { value: chosen, disabled: "" }, chosen);
+      select.append(orphan);
+    }
+    for (const option of options) select.append(el("option", { value: option }, option));
+    select.value = chosen ?? "";
+    select.disabled = options.length === 0;
+  };
+  fill(value);
+
+  select.addEventListener("change", () => onChange(select.value));
+  label.setAttribute("for", (select.id = `lever-${name.replace(/\W+/g, "-")}`));
+  row.append(label, select);
+
+  return {
+    row,
+    sync(chosen) {
+      if (select.value !== chosen) fill(chosen);
+    },
+  };
+}
+
 function group(title, note = null) {
   const box = el("fieldset", { class: "lever-group" });
   box.append(el("legend", {}, title));
@@ -185,6 +226,47 @@ export function mountLevers(root, state, { onEdit, onHour, hueFor }) {
   hours.append(hour.row);
   syncs.push(() => hour.sync(state.hour + 1));
   root.append(hours);
+
+  /* ---- the slack bus (W2.6).
+   *
+   * A DROPDOWN OVER THE BUS LIST, POSTED EXPLICITLY ON EVERY REQUEST. It
+   * re-solves, and what it moves is worth being exact about, because the
+   * obvious wrong expectation is that it moves prices:
+   *
+   *     λ moves.                    λ IS the LMP at the slack.
+   *     the congestion split moves. PTDF[l, slack] = 0 by construction.
+   *     NO LMP MOVES. Not one.      The two changes cancel exactly.
+   *     no payment, revenue or rent moves either.
+   *
+   * Measured on case5, slack D → A → E: λ moves $30 and every LMP is
+   * bit-identical (CLAUDE.md, trap 2). So this lever is the one place the
+   * site can show that the slack is an accounting origin rather than a
+   * modelling assumption -- and a page that showed prices sliding when it
+   * moved would have a bug in it, not a feature.
+   *
+   * The editor OWNS keeping this in step with its bus list: removeBus moves
+   * the slack to the first remaining bus, the same rule the engine's own
+   * fallback follows. The engine's refusal of a slack that is not a bus is
+   * kept, and it is the check that catches this failing (CLAUDE.md, W2.6).
+   */
+  const origin = group(
+    "Slack Bus",
+    "An accounting origin, not a modelling assumption. Moving it moves λ and " +
+      "the split between energy and congestion; it moves no LMP, no payment " +
+      "and no settlement figure at all. The ring on the map follows it.",
+  );
+  const slack = chooser({
+    name: "Slack",
+    options: state.buses.map((bus) => bus.name),
+    value: state.slack,
+    onChange: (name) => {
+      state.slack = name;
+      onEdit();
+    },
+  });
+  origin.append(slack.row);
+  syncs.push(() => slack.sync(state.slack));
+  root.append(origin);
 
   /* ---- line ratings. An OVERRIDE, not a config edit: clear() takes limits
      as its own argument, so moving a rating does not rewrite the scenario the
