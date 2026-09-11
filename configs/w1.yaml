@@ -1,0 +1,81 @@
+name: w1
+description: >
+  configs/m4.yaml restated as NAMED, PRICED demand bids. Same five buses, same
+  six lines, same five generators, same load shape, same peaks -- the only
+  change is that demand stopped being a number on the right-hand side and
+  became a participant with a name and a willingness to pay.
+
+  It must clear to exactly m4's answer, bit for bit, and
+  tests/test_w1_demand_blocks.py asserts that. That equality is the whole
+  reason this file exists: it is the control against which the demand-side
+  formulation is changed. Every firm bid is valued at the offer cap, which is
+  above every offer in the fleet, so the market serves all of it and nothing
+  moves. If a number in this file's result ever differs from m4's, the
+  formulation changed the answer for inelastic load, and that is a bug and not
+  a feature.
+
+  The network and fleet blocks are copied verbatim from configs/m4.yaml, and
+  that duplication is deliberate for the same reason it is deliberate there --
+  a config stands on its own -- and guarded the same way, by a test.
+
+network:
+  slack: D
+  buses: [A, B, C, D, E]
+  branches:
+    AB: {from: A, to: B, reactance_pu: 0.0281, limit_mw: 400.0}
+    AD: {from: A, to: D, reactance_pu: 0.0304, limit_mw: .inf}
+    AE: {from: A, to: E, reactance_pu: 0.0064, limit_mw: .inf}
+    BC: {from: B, to: C, reactance_pu: 0.0108, limit_mw: .inf}
+    CD: {from: C, to: D, reactance_pu: 0.0297, limit_mw: .inf}
+    DE: {from: D, to: E, reactance_pu: 0.0297, limit_mw: 240.0}
+
+fleet:
+  alta:      {bus: A, cost_usd_per_mwh: 14.0, pmax_mw:  40.0}
+  park_city: {bus: A, cost_usd_per_mwh: 15.0, pmax_mw: 170.0}
+  solitude:  {bus: C, cost_usd_per_mwh: 30.0, pmax_mw: 520.0}
+  sundance:  {bus: D, cost_usd_per_mwh: 40.0, pmax_mw: 200.0}
+  brighton:  {bus: E, cost_usd_per_mwh: 10.0, pmax_mw: 600.0}
+
+# ----------------------------------------------------------------------- load
+# A bid is (name, bus, price, quantity), which is a generator's offer with the
+# sign flipped. peak_mw is the most this bid will take, at the top of the
+# shape; value_usd_per_mwh is the most it will pay for a MWh.
+#
+# value_usd_per_mwh = 5000 is the ERCOT system-wide offer cap, and it is here
+# as a number in a config rather than a constant in the code because it is a
+# market parameter that MOVES: it was $9000/MWh before the 2021 legislation.
+# Verify it against the current Nodal Protocols before trusting it.
+#
+# Why the cap and not infinity: an infinite valuation is not a price, it is a
+# refusal to have one, and it puts inf into the objective. The cap says the
+# same thing a market says -- this load will outbid every generator, and it
+# will not outbid a number above the cap.
+#
+# ADDING DEMAND RESPONSE IS ADDING A LINE HERE. Nothing else changes:
+#
+#     B_datacenter: {bus: B, peak_mw: 80.0, value_usd_per_mwh: 300.0}
+#
+# That bid is served whenever LMP at bus B is below $300 and curtails when it
+# is above. It is a demand response resource in everything but paperwork, and
+# the engine does not have a special case for it -- which is the point of
+# naming bids rather than indexing them.
+load:
+  source: blocks
+  bids:
+    B_firm: {bus: B, peak_mw: 300.0, value_usd_per_mwh: 5000.0}
+    C_firm: {bus: C, peak_mw: 300.0, value_usd_per_mwh: 5000.0}
+    D_firm: {bus: D, peak_mw: 400.0, value_usd_per_mwh: 5000.0}
+  shape:
+    [0.56, 0.53, 0.51, 0.50, 0.52, 0.58,   # 00-05  overnight trough
+     0.66, 0.73, 0.81, 0.86, 0.89, 0.91,   # 06-11  morning ramp, congestion starts
+     0.92, 0.93, 0.91, 0.89, 0.93, 0.97,   # 12-17  midday shoulder, evening ramp
+     1.00, 0.98, 0.90, 0.78, 0.69, 0.58]   # 18-23  peak at hour 18, then decline
+
+notes: >
+  The demand-side FORMULATION is not written yet. This config carries priced
+  bids and src/model/dispatch.py still reads their total as a fixed
+  right-hand side, which is why the answer is identical to m4's today. The
+  two xfail tests in tests/test_w1_demand_blocks.py are the specification for
+  what changes when the LP learns to read the price: a bid valued below the
+  clearing price is curtailed, and a capacity shortfall becomes a price at the
+  cap instead of a RuntimeError.

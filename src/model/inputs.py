@@ -1,4 +1,4 @@
-"""Scenario and its parts: Generator, Bus, Branch, Load.
+"""Scenario and its parts: Generator, Bus, Branch, DemandBid.
 
 The boundary between ingest and model. Nothing in src/model/ may call a data
 source; it reads a Scenario and nothing else.
@@ -109,16 +109,75 @@ class Generator:
 
 
 @dataclass(frozen=True)
-class Load:
-    """Demand at one bus, keyed by UTC hour.
+class DemandBid:
+    """Demand at one bus, named, keyed by hour, and optionally priced.
 
-    mw maps an ISO-8601 UTC timestamp STRING to MW. A string, not a pandas
-    Timestamp, so that the model layer needs no pandas and a Scenario stays
-    trivially serializable into a run directory. Ingest formats it once; the
-    hours sort correctly as strings because ISO-8601 UTC does.
+    Deliberately the mirror image of Generator -- (name, bus, price, quantity)
+    against (name, bus, price, quantity) -- because economically it IS one. A
+    consumer willing to pay $300 and a generator offering at $300 are the same
+    object pointed in opposite directions, and the LP does not care which side
+    of the balance a variable sits on.
+
+        Generator   name  bus  cost_usd_per_mwh   pmax_mw
+        DemandBid   name  bus  value_usd_per_mwh  mw[t]
+
+    THE NAME IS THE POINT. An anonymous block indexed (bus, k) cannot later
+    carry an owner or a constraint that spans hours without renumbering every
+    config and every test. A named one can: `datacenter_dr` at bus B valued at
+    $300/MWh is a demand response resource already, and a duration limit at M9
+    attaches to that name. Naming costs nothing now and is the only thing that
+    makes the demand side extensible later.
+
+    mw maps an hour label to MW. The label's TYPE belongs to the source: an
+    ISO-8601 UTC string for real data (M2), the literal "static" for a
+    textbook snapshot (M3), an integer 0..23 for a synthetic day (M4). A
+    string, not a pandas Timestamp, so the model layer needs no pandas and a
+    Scenario stays trivially serializable into a run directory.
+
+    value_usd_per_mwh is what one MW is worth to this consumer, and its
+    absence is a claim rather than a gap:
+
+        None    INELASTIC. Must be served. Demand stays a constant on the
+                right-hand side of the energy balance, which is exactly the
+                M0-M4 formulation, unchanged. Every existing config takes this
+                branch and every existing number is untouched.
+
+        float   ELASTIC. The bid becomes a VARIABLE bounded 0..mw[t] with a
+                benefit term in the objective, and the market may decline to
+                serve it when the price exceeds what it is worth. Firm load is
+                this with the value set to the offer cap, so "load cannot be
+                served" stops being an infeasibility and becomes a price.
+
+    The engine does not yet read the second branch -- that formulation is
+    W1's, and dispatch.py is where it lands. This class carries the data so
+    that the ingest path, the config schema and the tests can exist and pass
+    BEFORE the LP changes, rather than all five things having to land at once.
     """
+    name: str
     bus: str
     mw: Dict[str, float]
+    value_usd_per_mwh: Optional[float] = None
+
+    def __post_init__(self):
+        if self.value_usd_per_mwh is not None and self.value_usd_per_mwh < 0:
+            # A negative valuation is a consumer who must be PAID to take
+            # power. That is a real thing (a must-run industrial process, a
+            # curtailment payment) but it is not what a typo means, and the
+            # LP would happily serve it to collect the benefit.
+            raise ValueError(
+                f"{self.name}: value_usd_per_mwh must be >= 0, got "
+                f"{self.value_usd_per_mwh}"
+            )
+        if not self.mw:
+            raise ValueError(f"{self.name}: no hours")
+        for t, mw in self.mw.items():
+            if mw < 0:
+                raise ValueError(f"{self.name}: negative demand {mw} at hour {t!r}")
+
+    @property
+    def elastic(self) -> bool:
+        """True if the market may decline to serve this bid."""
+        return self.value_usd_per_mwh is not None
 
 
 @dataclass(frozen=True)
@@ -131,7 +190,7 @@ class Scenario:
     """
     name: str
     generators: Tuple[Generator, ...]
-    loads: Tuple[Load, ...]
+    bids: Tuple[DemandBid, ...]
     buses: Tuple[Bus, ...] = ()
     branches: Tuple[Branch, ...] = ()
     provenance: Dict = field(default_factory=dict)
@@ -169,18 +228,22 @@ class Scenario:
             raise ValueError(f"duplicate generator names in {names}")
         if not self.generators:
             raise ValueError(f"{self.name}: no generators")
-        if not self.loads:
-            raise ValueError(f"{self.name}: no loads")
-        spans = {tuple(sorted(l.mw)) for l in self.loads}
+        bid_names = [b.name for b in self.bids]
+        if len(bid_names) != len(set(bid_names)):
+            dupes = sorted({n for n in bid_names if bid_names.count(n) > 1})
+            raise ValueError(f"duplicate demand bid names: {dupes}")
+        if not self.bids:
+            raise ValueError(f"{self.name}: no demand")
+        spans = {tuple(sorted(b.mw)) for b in self.bids}
         if len(spans) > 1:
-            raise ValueError("loads disagree on the hour index")
+            raise ValueError("demand bids disagree on the hour index")
 
     # -- views the solver consumes. plain dicts, no pandas, no I/O. --
 
     @property
     def hours(self) -> Sequence[str]:
         """The horizon, as sorted ISO-8601 UTC strings."""
-        return sorted(self.loads[0].mw)
+        return sorted(self.bids[0].mw)
 
     def cost(self) -> Dict[str, float]:
         """{gen: $/MWh}, the c argument to solve_dispatch_day."""
@@ -198,7 +261,7 @@ class Scenario:
         method gets a sibling rather than a rewrite.
         """
         return {
-            t: sum(l.mw[t] for l in self.loads)
+            t: sum(b.mw[t] for b in self.bids)
             for t in self.hours
         }
 
@@ -224,9 +287,50 @@ class Scenario:
         keep only the last of them.
         """
         out = {b.name: {t: 0.0 for t in self.hours} for b in self.buses}
-        for l in self.loads:
-            if l.bus not in out:
-                raise ValueError(f"load at unknown bus {l.bus!r}")
-            for t, mw in l.mw.items():
-                out[l.bus][t] += mw
+        for bid in self.bids:
+            if bid.bus not in out:
+                raise ValueError(f"demand bid at unknown bus {bid.bus!r}")
+            for t, mw in bid.mw.items():
+                out[bid.bus][t] += mw
         return out
+
+    def inelastic_by_bus(self) -> Dict[str, Dict[str, float]]:
+        """{bus: {hour: MW}}, counting ONLY the bids that must be served.
+
+        The sibling demand_by_bus() sums every bid and answers "how much was
+        asked for"; this answers "how much is not up for negotiation", which
+        is the constant the energy balance carries. With no elastic bids the
+        two are identical, which is why M0-M4 are untouched.
+
+        Every bus gets an entry, including ones carrying no load at all: the
+        network solver needs a number per bus to form an injection, and an
+        absent bus is a KeyError rather than a zero.
+        """
+        out = {b.name: {t: 0.0 for t in self.hours} for b in self.buses}
+        for bid in self.bids:
+            if bid.elastic:
+                continue
+            if bid.bus not in out:
+                raise ValueError(f"demand bid at unknown bus {bid.bus!r}")
+            for t, mw in bid.mw.items():
+                out[bid.bus][t] += mw
+        return out
+
+    # -- views a demand-side formulation will want. data only, no LP. --
+
+    def bid_value(self) -> Dict[str, Optional[float]]:
+        """{bid: $/MWh or None}. None is inelastic -- see DemandBid."""
+        return {b.name: b.value_usd_per_mwh for b in self.bids}
+
+    def bid_mw(self) -> Dict[Tuple[str, str], float]:
+        """{(bid, hour): MW}. The upper bound on an elastic bid's variable."""
+        return {(b.name, t): mw for b in self.bids for t, mw in b.mw.items()}
+
+    def bid_bus(self) -> Dict[str, str]:
+        """{bid: bus}. The demand-side twin of gen_bus."""
+        return {b.name: b.bus for b in self.bids}
+
+    @property
+    def elastic_bids(self) -> Tuple[DemandBid, ...]:
+        """The bids the market may decline to serve. Empty through M4."""
+        return tuple(b for b in self.bids if b.elastic)

@@ -16,7 +16,7 @@ from pathlib import Path
 import yaml
 
 from src.ingest import eia930
-from src.model.inputs import Branch, Bus, Generator, Load, Scenario
+from src.model.inputs import Branch, Bus, DemandBid, Generator, Scenario
 
 SINGLE_BUS = "bus1"
 
@@ -78,9 +78,9 @@ def _loads_eia930(spec, capacity, api_key):
 
     # pandas Timestamps become ISO-8601 UTC strings HERE. Past this line the
     # model layer has no pandas dependency and no timezone to get wrong.
-    loads = (Load(bus=SINGLE_BUS,
-                  mw={t.isoformat(): float(mw) for t, mw in scaled_mw.items()}),)
-    return loads, provenance
+    bids = (DemandBid(name=f"{SINGLE_BUS}_load", bus=SINGLE_BUS,
+                      mw={t.isoformat(): float(mw) for t, mw in scaled_mw.items()}),)
+    return bids, provenance
 
 
 def _loads_static(spec):
@@ -98,10 +98,11 @@ def _loads_static(spec):
     mw = spec["mw"]
     if not mw:
         raise ValueError("load.mw is empty: no demand to serve")
-    loads = tuple(
-        Load(bus=bus, mw={STATIC_HOUR: float(v)}) for bus, v in mw.items()
+    bids = tuple(
+        DemandBid(name=f"{bus}_load", bus=bus, mw={STATIC_HOUR: float(v)})
+        for bus, v in mw.items()
     )
-    return loads, {"load_source": "static", "static_load_mw": dict(mw)}
+    return bids, {"load_source": "static", "static_load_mw": dict(mw)}
 
 
 def _loads_profile(spec):
@@ -128,13 +129,41 @@ def _loads_profile(spec):
     it would make a fabricated instant look like ingested data. The UTC
     discipline belongs to real sources, and it arrives with RTS-GMLC at M5.
     """
-    shape = spec["shape"]
+    shape = _shape(spec)
     peak = spec["peak_mw"]
-    if not shape:
-        raise ValueError("load.shape is empty: no hours to solve")
     if not peak:
         raise ValueError("load.peak_mw is empty: no demand to serve")
 
+    bids = tuple(
+        DemandBid(name=f"{bus}_load", bus=bus,
+                  mw={t: float(mw) * shape[t] for t in range(len(shape))})
+        for bus, mw in peak.items()
+    )
+    provenance = {
+        "load_source": "profile",
+        "horizon_hours": len(shape),
+        "peak_load_mw": dict(peak),
+        "shape_peak_hour": shape.index(max(shape)),
+        "shape_min": min(shape),
+        "peak_trough_ratio": max(shape) / min(shape),
+    }
+    return bids, provenance
+
+
+def _shape(spec):
+    """The 24 fractions a daily profile is built from. Shared, not copied.
+
+    Both the profile and the blocks sources multiply a per-bus peak by this,
+    so it lives in one function. A second copy is how one of them ends up
+    accepting a shape that peaks at 0.95 while the other does not.
+
+    The peak must be exactly 1.0 rather than merely being the maximum: peak_mw
+    is read as the demand at the top of the shape, so a shape topping out
+    anywhere else silently rescales every bus.
+    """
+    shape = spec.get("shape")
+    if not shape:
+        raise ValueError("load.shape is empty: no hours to solve")
     shape = [float(v) for v in shape]
     for t, v in enumerate(shape):
         if v <= 0:
@@ -146,20 +175,80 @@ def _loads_profile(spec):
             "as the demand at the top of the shape, so a shape that peaks "
             "anywhere else silently rescales every bus."
         )
+    return shape
 
-    loads = tuple(
-        Load(bus=bus, mw={t: float(mw) * shape[t] for t in range(len(shape))})
-        for bus, mw in peak.items()
-    )
+
+def _bids_blocks(spec):
+    """Named, priced demand across a horizon. The W1 path.
+
+    The profile source says "bus B consumes 300 MW at the peak". This one says
+    "the bid named B_firm, at bus B, wants up to 300 MW and will pay up to
+    $5000/MWh for it" -- which is the same sentence with two things added: a
+    NAME and a PRICE.
+
+        load:
+          source: blocks
+          bids:
+            B_firm:       {bus: B, peak_mw: 300.0, value_usd_per_mwh: 5000.0}
+            B_datacenter: {bus: B, peak_mw:  80.0, value_usd_per_mwh:  300.0}
+          shape: [0.56, 0.53, ...]
+
+    Two bids at one bus is the whole point and is not a mistake to guard
+    against: that is a demand CURVE at bus B, and the second entry is demand
+    response. Nothing in the engine distinguishes them -- a DR resource is a
+    bid with a lower valuation, and it curtails when the price at its bus
+    passes it.
+
+    value_usd_per_mwh is REQUIRED here, unlike on DemandBid itself, where it
+    defaults to None so the M0-M4 sources stay inelastic and untouched. A
+    config that opts into blocks is opting into a priced demand side, and a
+    bid with no price in it is a block whose author has not decided what it is
+    worth -- which is the decision the source exists to force.
+
+    Firm load takes the system-wide offer cap as its value. That number is a
+    market parameter and belongs in the config with its provenance, never
+    hardcoded: ERCOT's cap has moved (it was $9000/MWh before the 2021
+    legislation) and a figure remembered from a write-up is how a stale
+    constant ends up looking like data.
+    """
+    bids_spec = spec.get("bids")
+    if not bids_spec:
+        raise ValueError("load.bids is empty: no demand to serve")
+    shape = _shape(spec)
+
+    bids = []
+    for name, bid in bids_spec.items():
+        if "bus" not in bid:
+            raise ValueError(f"bid {name}: no bus")
+        if "value_usd_per_mwh" not in bid:
+            raise ValueError(
+                f"bid {name}: value_usd_per_mwh is required by the blocks "
+                "source. Use the profile source for inelastic load."
+            )
+        peak = float(bid["peak_mw"])
+        bids.append(
+            DemandBid(
+                name=name,
+                bus=bid["bus"],
+                mw={t: peak * shape[t] for t in range(len(shape))},
+                value_usd_per_mwh=float(bid["value_usd_per_mwh"]),
+            )
+        )
+    bids = tuple(bids)
+
+    values = {b.name: b.value_usd_per_mwh for b in bids}
     provenance = {
-        "load_source": "profile",
+        "load_source": "blocks",
         "horizon_hours": len(shape),
-        "peak_load_mw": dict(peak),
-        "shape_peak_hour": shape.index(top),
-        "shape_min": min(shape),
-        "peak_trough_ratio": top / min(shape),
+        "bid_peak_mw": {b.name: max(b.mw.values()) for b in bids},
+        "bid_value_usd_per_mwh": values,
+        "bid_bus": {b.name: b.bus for b in bids},
+        "shape_peak_hour": shape.index(max(shape)),
+        # The highest valuation in the market. Everything above it is a price
+        # no bid will pay, so this is where lambda tops out.
+        "max_bid_value_usd_per_mwh": max(values.values()),
     }
-    return loads, provenance
+    return bids, provenance
 
 
 def _network(config):
@@ -205,11 +294,13 @@ def scenario_from_config(config, api_key=None, origin="<dict>"):
     spec = config["load"]
     source = spec.get("source")
     if source == "eia930":
-        loads, provenance = _loads_eia930(spec, capacity, api_key)
+        bids, provenance = _loads_eia930(spec, capacity, api_key)
     elif source == "static":
-        loads, provenance = _loads_static(spec)
+        bids, provenance = _loads_static(spec)
     elif source == "profile":
-        loads, provenance = _loads_profile(spec)
+        bids, provenance = _loads_profile(spec)
+    elif source == "blocks":
+        bids, provenance = _bids_blocks(spec)
     else:
         raise ValueError(f"unsupported load source {source!r}")
 
@@ -233,7 +324,7 @@ def scenario_from_config(config, api_key=None, origin="<dict>"):
     return Scenario(
         name=config["name"],
         generators=generators,
-        loads=loads,
+        bids=bids,
         buses=buses,
         branches=branches,
         provenance=provenance,

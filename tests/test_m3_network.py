@@ -751,7 +751,7 @@ class TestConfigFromDict:
         from_dict = scenario_from_config(load_config(CONFIG))
 
         assert from_dict.generators == from_file.generators
-        assert from_dict.loads == from_file.loads
+        assert from_dict.bids == from_file.bids
         assert from_dict.buses == from_file.buses
         assert from_dict.branches == from_file.branches
 

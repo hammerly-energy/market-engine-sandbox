@@ -112,20 +112,91 @@ def _check_day_inputs(c, Pmax, D):
 
 
 
-def solve_dispatch_network_day(c, Pmax, D, gen_bus, buses, PTDF, Fmax):
+def _validate_bids(bid_value, bid_mw, bid_bus, buses):
+    """The demand-side twin of _check_day_inputs. Caller bugs, not LP bugs.
+
+    Every one of these would otherwise surface as a KeyError inside a Pyomo
+    rule, from a stack frame that says nothing about which bid was wrong.
+    """
+    for k, v in bid_value.items():
+        if v < 0:
+            # The LP would serve it enthusiastically to collect the benefit.
+            raise ValueError(f"negative valuation for bid {k}: {v}")
+        if k not in bid_bus:
+            raise ValueError(f"bid {k} has no bus")
+        if bid_bus[k] not in buses:
+            raise ValueError(f"bid {k} at unknown bus {bid_bus[k]!r}")
+    missing = set(bid_value) ^ {k for k, _ in bid_mw}
+    if missing:
+        raise ValueError(f"bid_value and bid_mw disagree on the bids: {sorted(missing)}")
+    for (k, t), mw in bid_mw.items():
+        if mw < 0:
+            raise ValueError(f"negative quantity for bid {k} in hour {t}: {mw}")
+
+
+def solve_dispatch_network_day(c, Pmax, D, gen_bus, buses, PTDF, Fmax,
+                               bid_value=None, bid_mw=None, bid_bus=None):
     """Clear a NODAL energy market across a set of hours, on a DC network.
 
-    c        -- {gen: marginal cost $/MWh}      same in every hour
-    Pmax     -- {gen: capacity MW}              same in every hour
-    D        -- {bus: {t: MW}}                  from Scenario.demand_by_bus()
-    gen_bus  -- {gen: bus}
-    buses    -- ordered bus names; fixes the PTDF COLUMN order
-    PTDF     -- (L, N) array; rows ordered as Fmax's keys
-    Fmax     -- {line: MW}, .inf allowed        fixes the PTDF ROW order
+    c         -- {gen: marginal cost $/MWh}      same in every hour
+    Pmax      -- {gen: capacity MW}              same in every hour
+    D         -- {bus: {t: MW}} INELASTIC demand only
+    gen_bus   -- {gen: bus}
+    buses     -- ordered bus names; fixes the PTDF COLUMN order
+    PTDF      -- (L, N) array; rows ordered as Fmax's keys
+    Fmax      -- {line: MW}, .inf allowed        fixes the PTDF ROW order
+    bid_value -- {bid: $/MWh} willingness to pay, ELASTIC bids only
+    bid_mw    -- {(bid, t): MW} the most that bid will take in that hour
+    bid_bus   -- {bid: bus}
 
-    Returns {"p": {(gen, t): MW}, "lmbda": {t: $/MWh}, "cost": $,
+    Returns {"p": {(gen, t): MW}, "d": {(bid, t): MW}, "lmbda": {t: $/MWh},
+             "cost": $ PRODUCTION cost, "benefit": $ consumer benefit,
              "f": {(line, t): MW}, "mu_up"/"mu_dn": {(line, t): $/MWh}}.
     Raises RuntimeError if the solve is not optimal.
+
+    -- the demand side ------------------------------------------------------
+
+    Demand arrives in two forms and they are not two code paths, they are one
+    formulation with a term switched off:
+
+        INELASTIC   D[i][t]     a constant on the right-hand side. Must be
+                                served. This is M0-M4 exactly, and when there
+                                are no bids the model below IS the M4 model,
+                                variable for variable.
+
+        ELASTIC     d[k,t]      a VARIABLE bounded 0..bid_mw[k,t], carrying a
+                                benefit v[k] in the objective. The market may
+                                decline to serve it, and declines exactly when
+                                the price at its bus exceeds what it is worth.
+
+    Which turns "minimise production cost" into "maximise welfare" -- consumer
+    benefit minus production cost -- and the cost-minimising market is the
+    special case where every consumer values power above every offer.
+
+    THE BIG CONSEQUENCE: infeasibility from a capacity shortfall stops
+    existing. With every MW of demand priced, a market that cannot serve it
+    all serves the valuable part and prices at the valuation of the first MW
+    it declined. That is a scarcity price, and it is an answer rather than a
+    RuntimeError.
+
+    -- why generation stays on the left -------------------------------------
+
+    The balance is written
+
+        sum_g p[g,t] == sum_i D[i,t] + sum_k d[k,t]
+
+    with the new variables on the RIGHT, beside the constant they generalise,
+    rather than moved across as -sum_k d. Algebraically identical; not
+    identical to Pyomo. The dual's SIGN follows the form the row is written
+    in, and every price in this repo -- and the settlement identity that
+    checks them -- was verified against this arrangement. Flipping the row to
+    put d on the left would negate lambda and break the published case5 LMPs
+    in a way that looks like a PTDF error and is not.
+
+    lambda therefore keeps its meaning unchanged: the marginal cost of one
+    more MW of demand. With some demand inelastic it is the cost of one more
+    MW of THAT demand; with all of it elastic the constant is zero and lambda
+    is simply the clearing price. Same number, same row, same sign.
 
     Sits ALONGSIDE solve_dispatch_day, not in place of it. That one clears a
     single bus and its lambda is the whole price; this one adds the network,
@@ -154,11 +225,24 @@ def solve_dispatch_network_day(c, Pmax, D, gen_bus, buses, PTDF, Fmax):
     #
     #    B and L take their order from the caller, not from sorting, because
     #    that order IS the PTDF's column and row order.
+    bid_value = dict(bid_value or {})
+    bid_mw = dict(bid_mw or {})
+    bid_bus = dict(bid_bus or {})
+    _validate_bids(bid_value, bid_mw, bid_bus, buses)
+
     m.G = pyo.Set(initialize=list(c))
-    m.T = pyo.Set(initialize=sorted({t for per_bus in D.values() for t in per_bus}),
-                  ordered=True)
+    # Hours come from the demand side, and the demand side may now be entirely
+    # elastic -- a scenario where every MW is bid has D[i][t] == 0 at every bus
+    # and would otherwise have no hours at all.
+    hours = sorted({t for per_bus in D.values() for t in per_bus}
+                   | {t for _, t in bid_mw})
+    m.T = pyo.Set(initialize=hours, ordered=True)
     m.B = pyo.Set(initialize=list(buses), ordered=True)
     m.L = pyo.Set(initialize=list(Fmax), ordered=True)
+    # K is the demand-side twin of G. Empty through M4, and an empty Pyomo Set
+    # builds empty sums, so every expression below collapses to the M4 one
+    # rather than needing a branch.
+    m.K = pyo.Set(initialize=list(bid_value), ordered=True)
 
     # 2. one variable per generator PER HOUR, bounded 0..Pmax
     #    Unchanged from the single-bus model. A generator's capacity does not
@@ -166,12 +250,33 @@ def solve_dispatch_network_day(c, Pmax, D, gen_bus, buses, PTDF, Fmax):
     #    buses, not the machine.
     m.p = pyo.Var(m.G, m.T, bounds=lambda m, g, t: (0, capacity(Pmax, g, t)))
 
+    # 2b. one variable per ELASTIC BID per hour, bounded 0..what it asked for.
+    #     Deliberately the mirror of m.p: a bid is an offer with the sign
+    #     flipped, so it gets a variable of the same shape and the LP treats
+    #     the two symmetrically. The upper bound is the quantity bid, not a
+    #     forecast -- nobody is obliged to consume what they asked for.
+    m.d = pyo.Var(m.K, m.T, bounds=lambda m, k, t: (0, bid_mw[k, t]))
+
     # 3. minimize total cost over the whole horizon
     #    No transmission term. A DC line is lossless, so moving power costs
     #    nothing; congestion shows up as a binding constraint, never as a
     #    price in the objective.
-    m.cost = pyo.Objective(
-        expr=sum(c[g] * m.p[g, t] for g in m.G for t in m.T),
+    #    Production cost and consumer benefit are named separately because
+    #    they are separately meaningful: "cost" in this repo's return has
+    #    always been what generation cost to run, and it must keep that
+    #    meaning or every figure and every cost assertion silently changes to
+    #    an objective value that includes a $5000/MWh benefit term.
+    m.production_cost = pyo.Expression(
+        expr=sum(c[g] * m.p[g, t] for g in m.G for t in m.T)
+    )
+    m.benefit = pyo.Expression(
+        expr=sum(bid_value[k] * m.d[k, t] for k in m.K for t in m.T)
+    )
+    # Minimising cost minus benefit IS maximising welfare. Written as a
+    # minimisation because that is the sense every other model here uses and
+    # because flipping the sense would flip the duals.
+    m.obj = pyo.Objective(
+        expr=m.production_cost - m.benefit,
         sense=pyo.minimize,
     )
 
@@ -181,7 +286,10 @@ def solve_dispatch_network_day(c, Pmax, D, gen_bus, buses, PTDF, Fmax):
     #    step 6's job; this only says the books balance. One dual per hour,
     #    the same at every bus, which is exactly the energy component.
     def _balance(m, t):
-        return sum(m.p[g, t] for g in m.G) == sum(D[i][t] for i in buses)
+        return (
+            sum(m.p[g, t] for g in m.G)
+            == sum(D[i].get(t, 0.0) for i in buses) + sum(m.d[k, t] for k in m.K)
+        )
 
     m.balance = pyo.Constraint(m.T, rule=_balance)
 
@@ -195,7 +303,11 @@ def solve_dispatch_network_day(c, Pmax, D, gen_bus, buses, PTDF, Fmax):
     #    Writing these as constraints instead would work, but it would create
     #    dual families that mean nothing and clutter the settlement identity.
     def _inj(m, i, t):
-        return sum(m.p[g, t] for g in m.G if gen_bus[g] == i) - D[i][t]
+        return (
+            sum(m.p[g, t] for g in m.G if gen_bus[g] == i)
+            - D[i].get(t, 0.0)
+            - sum(m.d[k, t] for k in m.K if bid_bus[k] == i)
+        )
 
     m.inj = pyo.Expression(m.B, m.T, rule=_inj)
 
@@ -247,8 +359,12 @@ def solve_dispatch_network_day(c, Pmax, D, gen_bus, buses, PTDF, Fmax):
     #    becomes checkable.
     return {
         "p": {(g, t): pyo.value(m.p[g, t]) for g in m.G for t in m.T},
+        # Served MW per elastic bid. Empty when every bid is inelastic, in
+        # which case served demand is D and the caller already has it.
+        "d": {(k, t): pyo.value(m.d[k, t]) for k in m.K for t in m.T},
         "lmbda": {t: m.dual[m.balance[t]] for t in m.T},
-        "cost": pyo.value(m.cost),
+        "cost": pyo.value(m.production_cost),
+        "benefit": pyo.value(m.benefit),
         "f": {(l, t): pyo.value(m.f[l, t]) for l in m.L for t in m.T},
         "mu_up": {(l, t): m.dual[m.mu_up[l, t]] for l in m.L for t in m.T},
         "mu_dn": {(l, t): m.dual[m.mu_dn[l, t]] for l in m.L for t in m.T},
@@ -295,6 +411,12 @@ def solve_dispatch_day(c, Pmax, D):
     #    That is what makes the objective separable -- it is already a sum of
     #    24 independent terms, and step 4 decides whether the constraints
     #    keep it that way.
+    #
+    #    NO DEMAND SIDE HERE, deliberately. Elastic demand went into
+    #    solve_dispatch_network_day and stopped there. M0 and M1 are about
+    #    one bus and one time index, and a demand variable would add a second
+    #    thing to be wrong in the tests that establish separability. The two
+    #    models already sit alongside each other for exactly this reason.
     m.cost = pyo.Objective(
         expr=sum(c[g] * m.p[g, t] for g in m.G for t in m.T),
         sense=pyo.minimize,

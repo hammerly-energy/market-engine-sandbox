@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "market-engine"
-version = "0.4.0"          # tracks the milestone: 0.4 == M4 complete
+version = "0.5.0"          # tracks the milestone: 0.5 == W0 complete
 description = "A nodal electricity market clearing engine, built from scratch"
 requires-python = ">=3.9"
 license = { file = "LICENSE" }
@@ -17,10 +17,15 @@ dependencies = [
     "pyyaml>=6",
     "requests>=2.31",
     "matplotlib>=3.8",
+    # The web build. src/api/ is a caller of the engine, not part of it, but
+    # it ships in the same distribution because it is the only consumer and a
+    # second package for one module would be ceremony.
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "httpx>=0.27"]  # httpx backs fastapi.testclient
 
 # The importable package is `src`, matching every `from src.model import ...`
 # in this repo and in the tests. It is a poor name for a distributed package --

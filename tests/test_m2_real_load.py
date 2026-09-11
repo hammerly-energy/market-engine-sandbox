@@ -28,7 +28,7 @@ import pytest
 from src.ingest import eia930
 from src.ingest.scenario import build_scenario
 from src.model.dispatch import solve_dispatch_day
-from src.model.inputs import Generator, Load, Scenario
+from src.model.inputs import DemandBid, Generator, Scenario
 
 FIXTURE = "tests/fixtures/eia930_erco_2024-08-19.json"
 
@@ -62,7 +62,8 @@ def _scenario_from(path, peak_fraction=0.90):
         generators=tuple(
             Generator(g, "bus1", COST[g], PMAX[g]) for g in COST
         ),
-        loads=(Load("bus1", {t.isoformat(): float(v) for t, v in scaled.items()}),),
+        bids=(DemandBid("bus1_load", "bus1",
+                        {t.isoformat(): float(v) for t, v in scaled.items()}),),
     )
 
 

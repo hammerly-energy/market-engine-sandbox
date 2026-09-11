@@ -22,7 +22,14 @@ case needs no second argument.
 import numpy as np
 
 from src.model.dispatch import solve_dispatch_network_day
-from src.model.pricing import congestion_prices, lmps
+from src.model.pricing import (
+    congestion,
+    congestion_prices,
+    generator_status,
+    headroom,
+    lmps,
+    reduced_costs,
+)
 from src.network.ptdf import ptdf
 from src.settle.settlement import settle
 
@@ -48,6 +55,15 @@ def clear(scenario, slack=None, limits=None):
         because a caller that wants one snapshot indexes once, and a caller
         that wants the day iterates, and neither has to undo a shape the other
         preferred.
+
+        Three fields exist for a drawing caller rather than for the solve, and
+        are derived, not new arithmetic: "congestion" is the half of the LMP
+        that lmps() used to discard, "gen_cost"/"gen_pmax" are the fleet read
+        straight off the Scenario so a merit-order stack can be drawn without
+        the caller holding the config too, and "gen_status"/"headroom"/
+        "reduced_cost" are where each unit sits and what that is worth. They
+        live here because the alternative is a second, untested implementation
+        of the same arithmetic in the browser.
 
     Raises:
         ValueError on a scenario this cannot price; RuntimeError from the
@@ -82,7 +98,17 @@ def clear(scenario, slack=None, limits=None):
         Fmax.update({l: float(v) for l, v in limits.items()})
 
     gen_bus = {g.name: g.bus for g in scenario.generators}
-    D = scenario.demand_by_bus()
+
+    # Demand splits in two, and the split is the bid's own declaration rather
+    # than a setting here: a bid with a value is one the market may decline,
+    # a bid without one is a constant on the balance row. With no elastic
+    # bids -- every scenario through M4 -- D is demand_by_bus() exactly and
+    # the solver builds the M4 model.
+    D = scenario.inelastic_by_bus()
+    elastic = scenario.elastic_bids
+    bid_bus = {b.name: b.bus for b in elastic}
+    bid_value = {b.name: b.value_usd_per_mwh for b in elastic}
+    bid_mw = {(b.name, t): mw for b in elastic for t, mw in b.mw.items()}
 
     res = solve_dispatch_network_day(
         c=scenario.cost(),
@@ -92,10 +118,30 @@ def clear(scenario, slack=None, limits=None):
         buses=buses,
         PTDF=PTDF,
         Fmax=Fmax,
+        bid_value=bid_value,
+        bid_mw=bid_mw,
+        bid_bus=bid_bus,
     )
+
+    # What each bid actually got. Inelastic bids got what they asked for by
+    # definition; elastic ones got what the market decided they were worth.
+    # Reported for BOTH so a caller never has to know which kind it is
+    # holding -- the distinction is the engine's, not the reader's.
+    served = {(b.name, t): mw for b in scenario.bids if not b.elastic
+              for t, mw in b.mw.items()}
+    served.update(res["d"])
+    served_by_bus = {i: dict(D[i]) for i in buses}
+    for (k, t), mw in res["d"].items():
+        served_by_bus[bid_bus[k]][t] += mw
 
     mu = congestion_prices(res)
     lmp = lmps(res, buses, lines, PTDF)
+    cong = congestion(res, buses, lines, PTDF)
+
+    cost, Pmax = scenario.cost(), scenario.pmax()
+    status = generator_status(res, Pmax)
+    slack_mw = headroom(res, Pmax)
+    reduced = reduced_costs(lmp, cost, gen_bus, scenario.hours)
 
     # Settlement is per hour because the identity is per hour. Summing the day
     # first would let a positive residual in one hour cancel a negative one in
@@ -107,7 +153,11 @@ def clear(scenario, slack=None, limits=None):
             gen_mw[bus] += res["p"][g, t]
         settlement[t] = settle(
             lmp={b: lmp[b, t] for b in buses},
-            load_mw={b: D[b][t] for b in buses},
+            # SERVED, not declared. Load pays for what it took. Billing
+            # declared demand while the injection carries served demand puts
+            # the difference straight into the residual, where it reads like
+            # a PTDF sign error and is not one.
+            load_mw={b: served_by_bus[b][t] for b in buses},
             gen_mw=gen_mw,
             mu={l: mu[l, t] for l in lines},
             flows={l: res["f"][l, t] for l in lines},
@@ -124,8 +174,23 @@ def clear(scenario, slack=None, limits=None):
         "flows": res["f"],         # {(line, hour): MW}
         "mu": mu,                  # {(line, hour): $/MWh}
         "lmp": lmp,                # {(bus, hour): $/MWh}
+        "congestion": cong,        # {(bus, hour): $/MWh}, lmp - lmbda
         "lmbda": res["lmbda"],     # {hour: $/MWh}
-        "cost": res["cost"],       # $/h over the horizon
+        "gen_cost": cost,          # {gen: $/MWh}
+        "gen_pmax": Pmax,          # {gen: MW}
+        # Where each unit sits, what its headroom is, and what one more MW is
+        # worth to it. Status is a dispatch fact; reduced_cost is the money.
+        # Neither says "this unit sets the price" on its own, because under
+        # congestion no single unit does -- see pricing.generator_status.
+        "gen_status": status,      # {(gen, hour): "off"|"interior"|"at_max"}
+        "headroom": slack_mw,      # {(gen, hour): MW}
+        "reduced_cost": reduced,   # {(gen, hour): $/MWh}
+        "cost": res["cost"],       # $ production cost over the horizon
+        "benefit": res["benefit"],     # $ consumer benefit; 0 with no bids
+        "served": served,          # {(bid, hour): MW} actually consumed
+        "bid_bus": {b.name: b.bus for b in scenario.bids},
+        "bid_value": scenario.bid_value(),   # {bid: $/MWh or None}
+        "bid_mw": scenario.bid_mw(),         # {(bid, hour): MW} asked for
         "settlement": settlement,  # {hour: {...}}
         "PTDF": PTDF,
     }

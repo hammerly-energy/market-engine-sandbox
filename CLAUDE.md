@@ -136,7 +136,7 @@ market-engine-sandbox/
 │   │   ├── topology.py      buses, branches, susceptance matrix
 │   │   └── ptdf.py          shift factors
 │   ├── model/
-│   │   ├── inputs.py        Generator, Bus, Branch, Load, Scenario
+│   │   ├── inputs.py        Generator, Bus, Branch, DemandBid, Scenario
 │   │   ├── unit_commitment.py
 │   │   ├── dispatch.py
 │   │   └── pricing.py
@@ -352,13 +352,85 @@ be checked against a list of what was already true.
 | Duplicates a bus or branch name | `ValueError` at `Scenario.__post_init__` | Clean |
 | Adds a bus with no generator and no load | Prices correctly. The bus gets a real LMP | **Not a bug.** Do not "fix" |
 | Adds a second line between two buses | Solves correctly | **Not a bug.** Parallel lines are physical |
-| Sets capacity below load | `RuntimeError: solve not optimal: infeasible` from `dispatch.py:235` | **The one real gap.** W1 |
+| Sets capacity below load | `RuntimeError: solve not optimal: infeasible` from `dispatch.py:235` | **The one real gap.** W1, and the answer is *elastic demand* — see below |
 | Sets all load to zero | Solves, `λ = -0.0` | Degenerate, not broken. Trap 3 |
 
 The pattern: **topology was hardened at M3 and economics was not.** The
 network guards were written when PTDF was written, because a singular matrix
 is loud. An infeasible LP is quiet — it returns a status, and the status was
 only ever read by a developer.
+
+### W1 decision: what the engine says when load cannot be served
+
+**It admits a price.** Load stops being a constant on the right-hand side and
+becomes a variable with a value:
+
+```
+  today                          with a demand block
+  ─────                          ───────────────────
+  Σ p[g,t] == Σ D[i,t]           Σ p[g,t] == Σ d[i,k,t]
+                                              ▲
+  min  Σ c[g]·p[g,t]             min  Σ c[g]·p[g,t] − Σ v[i,k]·d[i,k,t]
+                                                        ▲
+  D is data                              d is a variable, 0 ≤ d ≤ Dmax[i,k,t]
+                                         v is what that MW is worth to the buyer
+```
+
+The objective stops being "minimise production cost" and becomes "maximise
+welfare" — consumer benefit minus production cost. The cost-minimising model
+is the special case, not a different model.
+
+Why this and not a refusal. A visitor's most likely act is to drag capacity
+down or load up, and a refusal makes the most interesting state in the whole
+market unreachable: **scarcity pricing**. With a block priced at VOLL, λ rises
+to VOLL in the short hour, and with a binding line the shortage — and the price
+— is *local*. That is a real market design, not a fallback.
+
+Three properties that make it safe to adopt:
+
+- **It subsumes the refusal.** One block per bus, `Dmax` = the forecast, `v` =
+  VOLL. Unserved MW is `Dmax − d`. A deploy that wants to refuse instead reports
+  `d < Dmax` as a hard failure and loses nothing.
+- **Nothing downstream changes.** `pricing.py` and `src/network/` are untouched;
+  the LMP assembly does not know what an injection is made of.
+- **M0–M4 must stay bit-identical.** With `v` above every offer the block is
+  always served in full, so every existing number is unchanged. That equality
+  is the acceptance test for the change, not a nice-to-have.
+
+The one place it breaks quietly is settlement: `payments` must be computed on
+**served** quantity `Σ_k d[i,k,t]`, not on declared load. Wrong, and the
+residual goes non-zero in exactly the interesting hours and reads like a PTDF
+sign error. Re-derive `payments − revenue = −Σ_l μ[l]·f[l]` with `d` in the
+injection before writing the code — the benefit term drops out, but the
+identity is only trustworthy because it was derived.
+
+VOLL is a number one invents, so it lives in the config with provenance and is
+never hardcoded. ERCOT's system-wide offer cap is the natural anchor; check the
+current protocols rather than a remembered figure.
+
+**Demand bids are named, not indexed.** `DemandBid(name, bus, mw, value)` is
+deliberately the mirror of `Generator(name, bus, cost, pmax)`, because
+economically it is one. The name is the load-bearing part: an anonymous block
+indexed `(bus, k)` cannot later carry an owner or a constraint spanning hours
+without renumbering every config and every test, and a named one can. Two bids
+at one bus is a demand curve, not a collision, and the lower-valued one is
+demand response — which is why M9(a) costs a line of YAML rather than an
+engine change.
+
+Firm load is valued at the **system-wide offer cap**, which lives in the
+config with its provenance and never in the code. ERCOT's has moved — it was
+$9000/MWh before the 2021 legislation — so a figure remembered from a
+write-up is exactly how a stale constant ends up looking like data.
+
+`value_usd_per_mwh = None` means inelastic and keeps demand on the right-hand
+side, which is how the data model, the config path and the tests could land
+green *before* the LP changes. `configs/w1.yaml` is the control: it restates
+`configs/m4.yaml` as priced bids and must clear to the same numbers bit for
+bit, today because the price is ignored and afterwards because a bid at the
+cap outbids every generator.
+
+The other two W1 questions — what an island means, and what happens when the
+slack is deleted — are still open.
 
 ### Degeneracy under a moving slider
 
@@ -429,6 +501,9 @@ when the code runs.
 | **M6** | *Not pursued.* | Unit commitment. Startup cost, min up/down, min stable output. | — | — |
 | **M7** | *Not pursued.* | Storage and reserves, co-optimized. | — | — |
 | **M8** | *Not pursued.* | Validation against published LMPs via `gridstatus`. | — | — |
+| **M9** | Demand-side participation | The rest of the demand side, once W1's single VOLL block exists. Two halves, and they are not the same size. **(a) Multi-block bids:** a real willingness-to-pay curve per bus instead of one block, so the clearing price can be set by a *consumer* and the merit-order view becomes two staircases meeting. Config and a figure; the LP is already the right shape. **(b) Load shifting:** `Σ_t d[i,t] == E[i]` — the day's energy is fixed and only its timing moves. | For (a): a demand block is the marginal resource in at least one hour, λ equals its valuation there, and the settlement identity still holds per hour. For (b): **`test_separability` fails, deliberately** — the joint 24-hour solve stops reproducing 24 independent hourly solves, because this is the first constraint in the repo that spans `t`. The dual on the energy-conservation row is a price on *when* energy is used, and it is the same object as storage arbitrage value. Do not build (b) without accepting that it is M7's formulation arriving early under another name. | (a) a weekend, (b) 1 week |
+
+M9 is not numbered after M8 because it comes after it in time — it comes after **W1**, which is what puts a demand variable in the LP at all. It is numbered as an engine milestone because that is where it changes code, and it sits below the not-pursued rows so the table stays in one order rather than two.
 
 M5-M8 are **deliberately not being built in this repo.** The rows stay because
 the reasoning in them is still correct and because the web build must not
@@ -450,7 +525,7 @@ is demonstrably true.
 | **W0** | Serve one solve | FastAPI in `src/api/`, wrapping `clear()`. One `POST /clear` taking a scenario config as JSON. Two things that are not transport and must land here: a **wire format** — `clear()` keys dispatch, flows, μ and lmp by `(name, hour)` tuples, which JSON cannot express — and **input bounds**, because a public URL means a hostile POST body and a live HiGHS solve behind one is a resource-exhaustion vector. Cap buses, branches, generators, hours and body size; reject, don't truncate. | The published case5 LMPs come back over HTTP and match the in-process `clear()` result field for field, asserted as a test. The API adds no arithmetic. An oversized or malformed body returns a named 4xx, never a traceback and never a solve. | 1 day |
 | **W1** | Make the engine total | Less is missing here than it looks. Measured, not assumed: islanding, an isolated bus, a mistyped slack, a zero-reactance branch and duplicate names **already** raise clean named `ValueError`s — `ptdf.py:48` and `topology.py:59` were built for exactly this. A connected bus with no generator and no load prices correctly. Parallel branches solve correctly. The one real gap is **infeasibility**: too little capacity for the load returns a bare `RuntimeError: solve not optimal: infeasible` from `dispatch.py:235`, which is not a sentence anyone can show a visitor. | **Every input the editor can produce returns either a priced solve or one named, displayable reason.** The fuzz test over random topologies is the deliverable, not the `RuntimeError` fix — the fix is an hour and the fuzz test is what proves *What the engine already refuses* is complete rather than merely the cases someone thought of. The harder half is the three formulation questions under **Purpose**: what an island means, what the engine says when load cannot be served, and what happens when the slack is deleted. Each has more than one defensible answer. Pick one each and write down why — a refusal chosen deliberately is a design; a refusal inherited from `ptdf.py` is an accident. | 1.5 days |
 | **W2** | The editor | The eight levers, against the live engine: line limit, peak load per bus, add/remove bus, connect/disconnect line, add/remove generator, edit generator capacity and marginal cost, hour 1–24, slack bus. | Every lever re-solves and redraws. The slack dropdown is the acceptance test, **on a fixture with a unique optimum**: moving it must rearrange the λ/congestion split while every LMP and every settlement figure stays bit-identical. A UI that shows prices moving with the slack has a bug in it. Run that assertion on a degenerate fixture and it will flake, correctly — see trap 2. | 1.5 weeks |
-| **W3** | The views | Network map with buses coloured by LMP; LMP split into λ + congestion; merit-order stack; settlement ledger with the residual; line flows against limits; live generation by unit; 24-hour heatmap. Three of these need fields `clear()` does not yet return — **add them in W0, not mid-W3**: a per-bus `congestion[bus, hour]`, which `pricing.py` already computes and then discards; per-generator `cost` and `pmax`, without which no merit-order stack can be drawn; and the marginal unit. Bus *coordinates* are not an engine concern at all — they are editor state, and they belong to W2. | Every number on screen is traceable to a field of the `clear()` return. Nothing is recomputed in JavaScript — the browser formats and draws, it does not do market arithmetic. The residual is displayed, not hidden, because a visible `≈ 0` is the claim the whole repo rests on. | 1 week |
+| **W3** | The views | Network map with buses coloured by LMP; LMP split into λ + congestion; merit-order stack; settlement ledger with the residual; line flows against limits; live generation by unit; 24-hour heatmap. Three of these need fields `clear()` does not yet return — **add them in W0, not mid-W3**: a per-bus `congestion[bus, hour]`, which `pricing.py` already computes and then discards; per-generator `cost` and `pmax`, without which no merit-order stack can be drawn; and per-generator **status** (`off` / `interior` / `at_max`) with its `headroom` and `reduced_cost`. Status, *not* "the marginal unit" — that field was written at W0 and replaced within the hour, because under congestion there is no single marginal unit and three of case5's five buses have an LMP equal to no offer at all. Bus *coordinates* are not an engine concern at all — they are editor state, and they belong to W2. | Every number on screen is traceable to a field of the `clear()` return. Nothing is recomputed in JavaScript — the browser formats and draws, it does not do market arithmetic. The residual is displayed, not hidden, because a visible `≈ 0` is the claim the whole repo rests on. | 1 week |
 | **W4** | The frame and the deploy | Narrative scroll, one section per engine milestone, each with its live figure and a link to the source that implements it. Equations rendered next to the code. Scope statement. Deployed. | A stranger can reach it at a URL, rewire the network, and leave understanding that λ is a dual variable. The scope statement is on the page, not in a footer. | 3 days |
 
 Do not skip to a later milestone. Each one's test suite is the foundation for the
