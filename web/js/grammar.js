@@ -1,6 +1,6 @@
 /* W2.5: the editing grammar.
  *
- * DRAG MOVES A BUS. EVERY OTHER STRUCTURAL EDIT IS AN ARMED MODE -- press a
+ * Drag moves a bus. Every other structural edit is an armed mode -- press a
  * button, then click the target. No modifier keys, no right-click, no
  * keyboard shortcuts. One grammar, and the same one for adding and removing
  * (CLAUDE.md, W2 decision: the editing grammar).
@@ -10,14 +10,14 @@
  *      └──── Esc, or press the ────┘
  *            armed button again
  *
- * THE CONSEQUENCE THAT MATTERS IS NOT STYLISTIC. With drag reserved for
- * moving, A BUS IS NEVER A DROP TARGET, so hit-testing only has to answer
+ * With drag reserved for moving, a bus is never a drop target, so
+ * hit-testing only has to answer
  * "which mark is under the pointer". There is no drag-source/drop-target
  * distinction, no rubber-band line to hit-test against, and no geometry in
  * this file at all beyond one coordinate conversion: every mark is a real SVG
  * element carrying a data- attribute, so `closest()` is the hit test. That is
  * most of what the ladder flags as this phase's overrun risk, removed by the
- * grammar rather than by cleverness.
+ * grammar rather than by hit-test geometry.
  *
  * Three things ride along because they are the same hit-testing and the same
  * state object:
@@ -26,7 +26,7 @@
  *                             visitor who armed "connect", got distracted and
  *                             came back connects two buses they had stopped
  *                             thinking about
- *   the keyboard path         focus and activate, NOT a shortcut. Marks are
+ *   the keyboard path         focus and activate, not a shortcut. Marks are
  *                             focusable and Enter completes the armed mode --
  *                             the ordinary activation semantics a button
  *                             already has, extended to the click half of the
@@ -36,7 +36,7 @@
  *   undo                      pulled forward, and it is what makes Remove
  *                             safe rather than a confirmation step
  *
- * NO MARKET ARITHMETIC. This file reads pointer coordinates and writes
+ * No market arithmetic. This file reads pointer coordinates and writes
  * declarations. Every number it produces is a bus coordinate, and coordinates
  * are editor state that never cross the wire.
  */
@@ -113,7 +113,7 @@ const DRAG_SLOP = 3;
 /* ------------------------------------------------------------- hit testing
  *
  * Every mark render.js draws carries its own data- attribute, so the target
- * of an event IS the answer -- no geometry, no distance search, no z-order
+ * of an event is the answer -- no geometry, no distance search, no z-order
  * reasoning. The transparent `.hit` shapes render.js lays over each mark are
  * what make a 14-unit disc and a 1.6-unit line comfortable to hit; they are a
  * matter of pointer comfort and carry no meaning of their own.
@@ -139,7 +139,7 @@ function pointIn(svg, event) {
  *
  * mountGrammar({svg, toolbar, readout, state, edit, move, mark, undo})
  *
- *   edit(label, mutator)   a STRUCTURAL change. main.js marks undo, mutates,
+ *   edit(label, mutator)   a structural change. main.js marks undo, mutates,
  *                          rebuilds the levers and posts a solve.
  *   move(mutator)          a coordinate change. Redraw only -- there is
  *                          nothing to ask the engine, because coordinates are
@@ -195,7 +195,7 @@ export function mountGrammar({ svg, toolbar, undoSlot, readout, state, edit, mov
     toolbar.append(button);
   }
 
-  /* UNDO IS NOT A SIXTH MODE and it does not live in the group of five. It
+  /* Undo is not a sixth mode, and it does not live in the group of five. It
      sits beside the readout, which is the line that says what just happened
      -- so "that is what happened" and "put it back" are next to each other,
      and nothing in the armed group can be misread as a thing to arm. It is
@@ -215,7 +215,7 @@ export function mountGrammar({ svg, toolbar, undoSlot, readout, state, edit, mov
      one is missable on its own. */
   function say(extra = null) {
     const m = MODE.get(mode);
-    /* THE PROSE USES `verb`, NOT `label`. A button label is shaped to be read
+    /* The prose uses `verb`, not `label`. A button label is shaped to be read
        at a glance on a chip -- "+ Line" -- and a sentence built from it reads
        as punctuation ("+ Line armed."). The two are separate fields so the
        toolbar can be terse without the readout becoming unreadable. */
@@ -260,7 +260,7 @@ export function mountGrammar({ svg, toolbar, undoSlot, readout, state, edit, mov
    *
    * One function for the click half of the grammar, whether the click came
    * from a pointer or from Enter on a focused mark. That is what keeps the
-   * keyboard path a PATH rather than a parallel implementation that drifts.
+   * keyboard path a path rather than a parallel implementation that drifts.
    */
   function activate(hit, ground) {
     const m = MODE.get(mode);

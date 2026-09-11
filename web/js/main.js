@@ -1,9 +1,9 @@
 /* W2.4: the five non-drag levers, against the live engine.
  *
- * THE SPLIT THIS PHASE ADDS, and it is the whole phase:
+ * The split this phase adds:
  *
- *     four levers change the SCENARIO  -> solve() -> paint()
- *     the hour lever changes the VIEW  ->            paint()
+ *     four levers change the scenario -> solve() -> paint()
+ *     the hour lever changes the view  ->            paint()
  *
  * clear() returns the whole day. Every series is one array per name aligned
  * to `hours`, so the hour is an index into an answer that is already in the
@@ -20,16 +20,16 @@
  *          |
  *        paint() reads `cleared`, never the server
  *
- * W2.5 ADDS A THIRD KIND OF CHANGE and this module is where the three are
+ * W2.5 adds a third kind of change, and this module is where the three are
  * told apart, because that is the only place they can be:
  *
  *     structural  add/remove a bus, a line, a generator. The shape of the
- *                 scenario moved, so the LEVERS are rebuilt too -- a removed
+ *                 scenario moved, so the levers are rebuilt too -- a removed
  *                 generator whose sliders stayed would write into an object
  *                 nothing renders. Undo point, redraw, re-solve.
  *     a lever     a number moved. Redraw, re-solve, levers left alone (they
  *                 are being dragged).
- *     a drag      a COORDINATE moved. Redraw and nothing else: coordinates are
+ *     a drag      a coordinate moved. Redraw and nothing else: coordinates are
  *                 editor state, never cross the wire, and no price depends on
  *                 them, so a solve here would be a round trip for an answer
  *                 the browser already has.
@@ -222,10 +222,9 @@ function onHour() {
 
 /* ------------------------------------------------------- the three changes
  *
- * A structural edit rebuilds the levers; a lever move does not. That is the
- * whole difference between these two, and getting it backwards is either a
- * slider that jumps out from under a dragging thumb or a slider left pointing
- * at a generator that no longer exists.
+ * A structural edit rebuilds the levers; a lever move does not. Backwards,
+ * that is either a slider that jumps out from under a dragging thumb or a
+ * slider left pointing at a generator that no longer exists.
  */
 
 const history = createHistory(editor);
@@ -247,7 +246,7 @@ function structural(label, mutate) {
   submit();
 }
 
-/* A coordinate change. NO SOLVE: bus x/y is editor state and never crosses
+/* A coordinate change. No solve: bus x/y is editor state and never crosses
    the wire, so there is no question here for the engine to answer. Redraw
    only, and it has to be immediate -- a map that waited on anything would lag
    the hand and the editor would feel broken. */
@@ -289,8 +288,8 @@ mountGrammar({
 document.querySelector("#solve").addEventListener("click", () => submit());
 
 /* Five posts in one tick, which is what a drag looks like to this module.
-   Exactly one is applied and the rest are dropped -- and the point is that
-   the one applied is the LAST ISSUED, not the first returned. */
+   Exactly one is applied and the rest are dropped, and the one applied is the
+   last issued, not the first returned. */
 document.querySelector("#burst").addEventListener("click", () => {
   for (let i = 0; i < 5; i += 1) submit();
 });

@@ -2,23 +2,23 @@
  *
  * Add or remove a bus, connect or cut a line, add or remove a generator.
  * Nothing here touches the DOM, the server or an event -- grammar.js owns
- * the interaction and main.js owns the redraw, so what an edit MEANS can be
+ * the interaction and main.js owns the redraw, so what an edit means can be
  * read in one place without reading a pointer handler.
  *
  *     grammar.js   which mark was clicked, and in which armed mode
  *     edits.js     what that does to the state object          <- this file
  *     main.js      snapshot, redraw, post
  *
- * THE INVARIANT EVERY EDIT HERE MAINTAINS: the state object is always a thing
+ * The invariant every edit here maintains: the state object is always a thing
  * toConfig() can emit and the engine can read. A removal that left a branch
  * naming a deleted bus, or a limits override naming a deleted branch, would
  * post a body the engine refuses -- clear() rejects an unknown limit key by
  * name -- and the visitor would read an error about a line they had just
- * removed. So removal is TRANSITIVE and it is enforced here, not by hoping
+ * removed. So removal is transitive, and it is enforced here, not by hoping
  * every call site remembers.
  *
- * ONE THING IS DELIBERATELY NOT REPAIRED: the hue a bus is drawn in. Colour
- * is assigned by CONFIG ORDER (render.js, hueFor) to match src/viz, so
+ * One thing is deliberately not repaired: the hue a bus is drawn in. Colour
+ * is assigned by config order (render.js, hueFor) to match src/viz, so
  * removing the second of five buses re-colours the three after it. That is
  * self-consistent rather than wrong -- config order is what changed -- and it
  * is a placeholder either way: W3 replaces the bus fill with a price scale.
@@ -30,7 +30,7 @@ import { defaultBranch, defaultGenerator } from "./state.js";
 
 /* ------------------------------------------------------------------ naming
  *
- * A NAME IS THE LOAD-BEARING PART, the same way CLAUDE.md says a demand bid's
+ * A name is the load-bearing part, the same way CLAUDE.md says a demand bid's
  * is: it is what the wire carries, what an error sentence quotes, and what a
  * later constraint would hang off. So names are generated to be readable and
  * stable, never to be an index -- and never reused, because a name that came
@@ -87,13 +87,13 @@ export function addBus(state, x, y) {
 
 /* Remove a bus and everything that names it.
  *
- * Transitive, and the sweep is the point: a branch to a bus that is gone, a
- * generator at it or a bid on it are each a body the engine refuses by name,
- * and the visitor would read a sentence about an object they did not touch.
+ * Transitive: a branch to a bus that is gone, a generator at it or a bid on it
+ * are each a body the engine refuses by name, and the visitor would read a
+ * sentence about an object they did not touch.
  *
- * THE SLACK IS KEPT VALID HERE, which is half of W2.6 arriving early because
+ * The slack is kept valid here, which is half of W2.6 arriving early because
  * the alternative is a 422 on the most ordinary edit on the page. The engine
- * refuses a slack that is not a bus and that refusal is CORRECT -- it is the
+ * refuses a slack that is not a bus and that refusal is correct -- it is the
  * check that catches the editor failing to keep its own dropdown in step
  * (CLAUDE.md, W2.6). So the editor keeps it in step. It moves to the first
  * remaining bus in config order, which is the same rule the engine's own
@@ -162,9 +162,9 @@ export function connect(state, from, to) {
 
 /* Cut a line, and drop its rating override with it.
  *
- * The override is clear()'s limits= ARGUMENT, keyed by line name, and clear()
+ * The override is clear()'s limits= argument, keyed by line name, and clear()
  * refuses an unknown key rather than ignoring it. So a cut that left the
- * override behind would make the NEXT solve fail, naming a line the visitor
+ * override behind would make the next solve fail, naming a line the visitor
  * had already removed -- a refusal one edit downstream of its cause, which is
  * the worst kind to debug from a screen.
  */
@@ -191,7 +191,7 @@ export function generatorsAt(fleet, bus) {
 
 /* ------------------------------------------------------------------- undo
  *
- * UNDO IS WHAT MAKES REMOVE SAFE, and it replaces a confirmation dialog
+ * Undo is what makes Remove safe, and it replaces a confirmation dialog
  * rather than supplementing one. A confirm taxes the most exploratory act on
  * the page -- and the site's whole pitch is that rewiring is safe to try --
  * while undo removes the class of question instead of answering it each time
@@ -200,7 +200,7 @@ export function generatorsAt(fleet, bus) {
  * Editor state is plain data, so a snapshot is a structuredClone and the
  * stack is a list of them. Cheaper than the dialog it replaces.
  *
- * RESTORE WRITES INTO THE EXISTING OBJECT rather than replacing it. The
+ * Restore writes into the existing object rather than replacing it. The
  * lever closures in controls.js hold references to individual generator and
  * bid objects, so handing back a fresh state object would leave every slider
  * writing into a state nothing renders. Rebuilding the levers after a restore
@@ -221,9 +221,9 @@ function restore(state, snap) {
 
 /* createHistory(state) -> {mark, undo, drop, depth}
  *
- *   mark(label)  record the state as it is NOW, before a mutation
+ *   mark(label)  record the state as it is now, before a mutation
  *   undo()       put the most recent mark back; returns its label, or null
- *   drop()       throw the most recent mark away WITHOUT restoring it
+ *   drop()       throw the most recent mark away without restoring it
  *   depth()      how many marks are on the stack
  *
  * drop() exists because a drag has to take its undo point on pointerdown --

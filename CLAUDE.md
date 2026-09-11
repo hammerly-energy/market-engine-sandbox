@@ -60,6 +60,69 @@ The skill's own exceptions still apply, and two of them matter constantly here:
 the concept needs — and a **destructive action gets confirmed before it runs**,
 brevity notwithstanding.
 
+## How to write a comment in this repo
+
+The prose in `src/`, `web/` and this file is read by people who did not write
+it, including the author six months later. It carries the decisions, because
+the code carries only the outcome. What follows is the register for that
+prose, and it applies to comments, docstrings, captions, on-screen notes and
+to edits to this file.
+
+**A comment states a fact, a measurement, or a decision and its reason.**
+Anything else is padding. The test: delete the sentence and ask what the
+reader no longer knows. If the answer is "nothing", it was decoration.
+
+**Do not shout.** No all-caps sentences, no all-caps phrases for emphasis.
+Caps are for identifiers that are literally capitalised — `MW`, `PTDF`,
+`INK_MUTED`, `SUPERSEDED`. Emphasis comes from position: put the load-bearing
+sentence first in the block. A comment that shouts three times has told the
+reader nothing about which of the three matters.
+
+**Sentence case in prose.** Title Case belongs to titles and headings only —
+figure panel titles, section headings, the HTML `<title>`, control-group
+headings. A sentence inside a comment is a sentence.
+
+**No rhetorical scaffolding.** These are the tells, and they had colonised
+eight files before anyone counted them:
+
+- *"...which is the failure this module exists to prevent"* — name the
+  failure, then stop.
+- *"...and that is the whole point / the whole design / the entire
+  difference"* — if it is the point, it is already the first sentence.
+- *"X is not a Y, it is a Z"* — say what it is. The antithesis is only worth
+  the words when someone actually believes X is a Y, and then the belief is
+  worth naming.
+- *"the most important line in that file"*, *"the single most honest thing
+  this site can show"* — superlatives about your own work. Cut, or replace
+  with the measurement that earned them.
+- *"a deliberate limit rather than an oversight"* — defending the code
+  against an accusation nobody made.
+
+**Claims about what a reader would think are weak; claims about what was
+measured are strong.** "A reader would find this confusing" is untestable.
+"`#8a8880` on `#fcfcfb` is 3.46:1, under AA's 4.5" is a fact, and it is the
+sentence that actually justifies the change.
+
+**Give an equation room to breathe.** A formula belongs on its own line,
+indented, with the symbols defined around it — never buried mid-sentence:
+
+```
+    left = (v - min) / (max - min)      of the inset rail
+
+A range input's travel is the track minus the thumb, so the thumb centre
+never reaches either end.
+```
+
+**Comments go stale, and a stale comment is worse than none.** When a number
+in a comment is measured, date it to the milestone that measured it, so a
+later contradiction is visible as a contradiction rather than read as truth.
+`controls.js` still called the slack-invariant LMPs "bit-identical" for a
+whole phase after trap 2 was corrected to say they are equal to ~1e-13.
+
+**Length is earned by content, not by importance.** A formulation decision
+with three measurements and a rejected alternative can run thirty lines. A
+CSS rule cannot, however important the rule is.
+
 ## Core mechanics a contributor must understand
 
 **Prices are dual variables.** The dual on the energy balance constraint is the marginal cost of serving one more MW. That is the price. It is not computed by a pricing rule; it falls out of the optimization.

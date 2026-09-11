@@ -42,19 +42,6 @@
     </p>
   </section>
 
-  <section class="panel wide">
-    <h2>Levers</h2>
-    <p class="note">
-      Four of these change the scenario and re-solve on every step of the
-      slider; the hour does not, because the engine returns the whole day at
-      once. Nothing is debounced — at a degenerate breakpoint the price
-      genuinely flickers between equally valid values, and that is shown
-      rather than smoothed away. The slack re-solves too, and it is the one
-      lever that should change λ while leaving every LMP exactly where it was.
-    </p>
-    <div id="levers"></div>
-  </section>
-
   <section class="panel" data-results>
     <h2>Prices</h2>
     <p class="note" id="hour-note">Waiting for the first solve…</p>
@@ -78,6 +65,17 @@
       because a visible <code>≈ 0</code> is the claim the rest of this rests
       on.
     </p>
+  </section>
+
+  <section class="panel wide">
+    <h2>Levers</h2>
+    <p class="note">
+      A filled thumb re-solves. The hollow one indexes a day already on the
+      page. Nothing is debounced — at a degenerate breakpoint the price
+      genuinely flickers between equally valid values, and that is shown
+      rather than smoothed away.
+    </p>
+    <div id="levers"></div>
   </section>
 
   <section class="panel">

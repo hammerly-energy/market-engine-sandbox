@@ -1,19 +1,18 @@
 /* W2.4: the five levers that are not a drag.
  *
- *   line limit     -> state.limits[line], which is clear()'s limits= ARGUMENT
+ *   line limit     -> state.limits[line], which is clear()'s limits= Argument
  *                     and not a config edit
  *   peak load      -> bid.peak_mw
  *   generator pmax -> gen.pmax_mw
  *   generator cost -> gen.cost_usd_per_mwh
- *   hour 1-24      -> state.hour, WHICH DOES NOT RE-SOLVE
+ *   hour 1-24      -> state.hour, which does not re-solve
  *
  * and, added at W2.6, the sixth:
  *
  *   slack bus      -> state.slack, a dropdown over the bus list, posted
  *                     explicitly on every request
  *
- * THE HOUR IS THE ONE THAT IS DIFFERENT AND IT IS THE POINT OF THIS PHASE.
- * clear() returns the whole day -- every series is one array per name aligned
+ * The hour is the one that is different. clear() returns the whole day -- every series is one array per name aligned
  * to `hours` -- so moving the hour indexes arrays that are already in the
  * browser. Posting a solve to look at hour 19 of a day already on the page
  * would be a second answer to a question already answered, and the two could
@@ -26,7 +25,7 @@
  * a slider is the slider's own position formatted -- what that position did
  * to a price is the engine's answer, printed elsewhere.
  *
- * THE SLIDERS ARE NOT DEBOUNCED. Dragging one fires a solve per step and the
+ * The sliders are not debounced. Dragging one fires a solve per step and the
  * coalescing in api.js drops the stale answers; the price flicker at a
  * degenerate breakpoint survives, because it is the most honest thing this
  * site can show (CLAUDE.md, "Degeneracy under a moving slider").
@@ -36,7 +35,7 @@ import { UNLIMITED } from "./state.js";
 
 /* ----------------------------------------------------------- slider domains
  *
- * A DOMAIN IS A MARKET ASSUMPTION, the same way a default is, so each one is
+ * A domain is a market assumption, the same way a default is, so each one is
  * written down with the reason it is that number. Fixed, never rescaled to
  * the current state: a slider whose end moved when the scenario moved would
  * make the same hand position mean two different MW, which is the legend trap
@@ -46,7 +45,7 @@ import { UNLIMITED } from "./state.js";
 /* Line ratings. case5's whole firm peak is 1000 MW (300 + 300 + 400), so a
    line rated at the ceiling cannot bind on the seeded case, and the interval
    below it is where every interesting rating lives -- the DE line binds at
-   240. The LAST NOTCH IS UNLIMITED, literally: it writes null, not a big
+   240. The last notch is unlimited, literally: it writes null, not a big
    number, because "inf" is what the scenario says and a 1000 MW line that
    happens never to bind is a different claim from a line with no rating. */
 const LIMIT_STEP_MW = 5;
@@ -88,16 +87,33 @@ function el(tag, attrs = {}, text = null) {
 /* One labelled slider. Returns {row, sync} -- sync() rewrites the readout
    from state WITHOUT touching the input, because rebuilding an input under a
    dragging thumb drops the drag. */
-function slider({ name, min, max, step, value, format, onInput, swatch = null }) {
-  const row = el("div", { class: "lever" });
+function slider({
+  name,
+  min,
+  max,
+  step,
+  value,
+  format,
+  onInput,
+  swatch = null,
+  kind = "edit",
+  ticks = null,
+  lead = null,
+}) {
+  const row = el("div", { class: "lever", "data-kind": kind });
 
-  const label = el("label", { class: "lever-name" });
+  /* `lead` puts an element in the name column instead of the name. Only the
+     hour uses it, to seat its transport where the label would otherwise
+     repeat the legend directly above it. The input keeps its aria-label
+     either way, so the control is still named without the <label>. */
+  const label = el(lead ? "span" : "label", { class: "lever-name" });
   if (swatch) {
     const dot = el("span", { class: "swatch" });
     dot.style.background = swatch;
     label.append(dot);
   }
-  label.append(document.createTextNode(name));
+  if (lead) label.append(lead);
+  else label.append(document.createTextNode(name));
 
   const input = el("input", {
     type: "range",
@@ -115,8 +131,29 @@ function slider({ name, min, max, step, value, format, onInput, swatch = null })
     onInput(pos);
   });
 
-  label.setAttribute("for", (input.id = `lever-${name.replace(/\W+/g, "-")}`));
-  row.append(label, input, readout);
+  input.id = `lever-${name.replace(/\W+/g, "-")}`;
+  if (!lead) label.setAttribute("for", input.id);
+
+  /* The rail, and under it the ticks if this lever has any. A tick is a scale
+     mark, not a control: aria-hidden, and pointer-events: none in style.css,
+     where the half-thumb inset its position is measured against also lives.
+
+         left = (v - min) / (max - min)
+
+     of the inset rail, which is the thumb centre's own travel. */
+  const scale = el("div", { class: "lever-scale" });
+  scale.append(input);
+  if (ticks && ticks.length) {
+    const rail = el("div", { class: "lever-ticks", "aria-hidden": "true" });
+    for (const v of ticks) {
+      const tick = el("span");
+      tick.style.left = `${((v - min) / (max - min)) * 100}%`;
+      rail.append(tick);
+    }
+    scale.append(rail);
+  }
+
+  row.append(label, scale, readout);
 
   return {
     row,
@@ -185,6 +222,33 @@ function posToLimit(pos) {
   return pos >= LIMIT_INF_POS ? UNLIMITED : pos;
 }
 
+/* ----------------------------------------------------------- the transport
+ *
+ * Play steps the hour through the day. It posts nothing -- it is the hour
+ * slider moved on a timer, and the hour indexes arrays the last response
+ * already carried. Solving each step instead would re-ask a question that
+ * response answered, and at a degenerate breakpoint the second answer can
+ * differ from the first (trap 3) with nothing on screen to explain it.
+ *
+ *     24 steps x 400 ms = 9.6 s a pass
+ *
+ * It loops, and it starts stopped: nothing on this page animates on load.
+ * Motion here is continuity, not decoration (CLAUDE.md, Interactive figure
+ * register).
+ *
+ * The timer is module state and is cleared at the top of every mount. A
+ * structural edit rebuilds the levers, and an interval left running over that
+ * rebuild would go on writing state.hour through a closure over levers that
+ * were thrown away.
+ */
+const HOUR_STEP_MS = 400;
+let transport = null;
+
+function stopTransport() {
+  if (transport !== null) clearInterval(transport);
+  transport = null;
+}
+
 const mw = (x) => `${x.toFixed(0)} MW`;
 const usdPerMwh = (x) => `$${x.toFixed(2)}`;
 const limitText = (pos) => (pos >= LIMIT_INF_POS ? "∞" : mw(pos));
@@ -193,8 +257,8 @@ const limitText = (pos) => (pos >= LIMIT_INF_POS ? "∞" : mw(pos));
  *
  * mountLevers(el, state, {onEdit, onHour}) -> sync()
  *
- *   onEdit()   state has changed in a way the ENGINE must answer. Re-solve.
- *   onHour()   state has changed in a way the RESPONSE already answers.
+ *   onEdit()   state has changed in a way the Engine must answer. Re-solve.
+ *   onHour()   state has changed in a way the Response already answers.
  *              Re-read the arrays that are already here. No post.
  *
  * sync() rewrites every readout from state, for the levers a lever moved --
@@ -203,48 +267,89 @@ const limitText = (pos) => (pos >= LIMIT_INF_POS ? "∞" : mw(pos));
  */
 export function mountLevers(root, state, { onEdit, onHour, hueFor }) {
   root.replaceChildren();
+  stopTransport();
   const syncs = [];
 
   /* ---- the hour. First, because it is the one that does not re-solve. */
   const hours = group(
     "Hour",
-    "Indexes the day the last solve returned. It does not post a solve — the " +
-      "day comes back whole.",
+    "Indexes the day the last solve returned. Playing it posts nothing — the " +
+      "day is already here.",
   );
+  const lastHour = Math.max(state.shape.length, 1);
+
+  /* Play, in the name column to the left of the rail. The name it displaces
+     is "Hour", which the legend directly above already says. */
+  const play = el("button", {
+    type: "button",
+    class: "transport",
+    "aria-pressed": "false",
+    "aria-label": "Play the day, one hour at a time",
+  }, "Play");
+  play.disabled = state.shape.length < 2;
+
   const hour = slider({
     name: "Hour",
     min: 1,
-    max: Math.max(state.shape.length, 1),
+    max: lastHour,
     step: 1,
     value: state.hour + 1,
     format: (h) => `${h} of ${state.shape.length}`,
+    /* W2.7. The lever that does not re-solve says so in its geometry: a hollow
+       thumb, and ticks every six hours. Both are in style.css. */
+    kind: "index",
+    ticks: Array.from(
+      { length: Math.floor(lastHour / 6) },
+      (_, i) => (i + 1) * 6,
+    ),
+    lead: play,
     onInput: (h) => {
       state.hour = h - 1;
       onHour();
     },
   });
+  const showHour = () => {
+    hour.sync(state.hour + 1);
+    onHour();
+  };
+
+  const setPlaying = (on) => {
+    stopTransport();
+    play.setAttribute("aria-pressed", String(on));
+    play.textContent = on ? "Pause" : "Play";
+    if (!on) return;
+    transport = setInterval(() => {
+      state.hour = (state.hour + 1) % state.shape.length;
+      showHour();
+    }, HOUR_STEP_MS);
+  };
+
+  play.addEventListener("click", () => {
+    setPlaying(play.getAttribute("aria-pressed") !== "true");
+  });
+
   hours.append(hour.row);
   syncs.push(() => hour.sync(state.hour + 1));
   root.append(hours);
 
   /* ---- the slack bus (W2.6).
    *
-   * A DROPDOWN OVER THE BUS LIST, POSTED EXPLICITLY ON EVERY REQUEST. It
+   * A dropdown over the bus list, posted explicitly on every request. It
    * re-solves, and what it moves is worth being exact about, because the
    * obvious wrong expectation is that it moves prices:
    *
-   *     λ moves.                    λ IS the LMP at the slack.
+   *     λ moves.                    λ is the LMP at the slack.
    *     the congestion split moves. PTDF[l, slack] = 0 by construction.
-   *     NO LMP MOVES. Not one.      The two changes cancel exactly.
+   *     no LMP moves.               The two changes cancel.
    *     no payment, revenue or rent moves either.
    *
-   * Measured on case5, slack D → A → E: λ moves $30 and every LMP is
-   * bit-identical (CLAUDE.md, trap 2). So this lever is the one place the
-   * site can show that the slack is an accounting origin rather than a
-   * modelling assumption -- and a page that showed prices sliding when it
-   * moved would have a bug in it, not a feature.
+   * Measured on case5, slack D → A → E: λ moves $30 and no LMP moves. Equal
+   * to float64 debris, not bitwise -- a different slack is a different PTDF
+   * and so a different LP, which leaves ~1.7e-13 on an LMP and ~9.8e-11 on a
+   * payment (CLAUDE.md, trap 2). No view on this page shows that many digits,
+   * so on screen the prices do not move.
    *
-   * The editor OWNS keeping this in step with its bus list: removeBus moves
+   * The editor owns keeping this in step with its bus list: removeBus moves
    * the slack to the first remaining bus, the same rule the engine's own
    * fallback follows. The engine's refusal of a slack that is not a bus is
    * kept, and it is the check that catches this failing (CLAUDE.md, W2.6).
@@ -268,7 +373,7 @@ export function mountLevers(root, state, { onEdit, onHour, hueFor }) {
   syncs.push(() => slack.sync(state.slack));
   root.append(origin);
 
-  /* ---- line ratings. An OVERRIDE, not a config edit: clear() takes limits
+  /* ---- line ratings. An Override, not a config edit: clear() takes limits
      as its own argument, so moving a rating does not rewrite the scenario the
      rating belongs to, and dropping the override restores it exactly. */
   const lines = group(
@@ -337,7 +442,7 @@ export function mountLevers(root, state, { onEdit, onHour, hueFor }) {
   }
   root.append(fleet);
 
-  /* ---- demand. PER BID, not per bus, even though CLAUDE.md's lever list
+  /* ---- demand. Per bid, not per bus, even though CLAUDE.md's lever list
      says "peak load per bus" -- because two bids at one bus is a demand curve
      and not a collision, and a per-bus slider would have to pick one of them
      to move or split the move between them. Both are inventions. The bid is

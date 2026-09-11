@@ -1,19 +1,18 @@
 /* The error surface: one place that turns a failure into something readable.
  *
- * IT SWITCHES ON THE CODE AND PRINTS THE DETAIL VERBATIM. That division is
- * the whole design. `code` is a stable string -- bounds.py calls it exactly
- * that -- so this file may branch on it; `detail` is a sentence written on
- * the server to be read by a person, naming the bus, the count or the cap
- * that was wrong, and rewriting it here would throw away the only part that
- * says WHICH thing went wrong.
+ * It switches on the code and prints the detail verbatim. `code` is a stable
+ * string -- bounds.py calls it exactly that -- so this file may branch on it.
+ * `detail` is a sentence written on the server to be read by a person, naming
+ * the bus, the count or the cap that was wrong; rewriting it here would throw
+ * away the only part that says which thing went wrong.
  *
  *     code    ->  a heading this file chooses, and what to do about it
  *     detail  ->  shown as sent, never parsed, never reworded
  *
  * A code this file does not know still renders: the heading falls back to the
  * code itself and the detail carries the meaning. An unknown code must never
- * be swallowed -- a server that grows a refusal and a page that hides it is
- * exactly the silent failure W1 spent its budget removing.
+ * be swallowed -- a server that grows a refusal and a page that hides it puts
+ * back the silent failure W1 removed.
  */
 
 const KNOWN = {
@@ -34,7 +33,7 @@ const KNOWN = {
    * scenario cannot be built. The detail is the part that differs, and the
    * table in CLAUDE.md is the list: a one-bus network, a duplicate name, a
    * zero reactance, an empty fleet, a slack that is not a bus. A cut network
-   * is NOT among them -- an island is priced, not refused. Those sentences
+   * is not among them -- an island is priced, not refused. Those sentences
    * were written to be read and are shown as written.
    */
   invalid_scenario: {
@@ -46,7 +45,7 @@ const KNOWN = {
      `blocks`. If a visitor sees this, the emitter has been changed and the
      change is the bug -- bounds.py refuses eia930 because a source that
      fetches would make a stranger's POST call a live API with this server's
-     key, which is the most important line in that file. */
+     key. */
   unsupported_load_source: {
     heading: "That demand source cannot be reached over HTTP",
     fix: "The editor declares its demand as priced blocks. This is a client bug.",

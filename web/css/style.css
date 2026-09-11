@@ -9,6 +9,24 @@
   --ink-muted: #8a8880;
   --grid: #e7e6e2;
 
+  /* W2.7. Measured on --surface, against AA's 4.5:1 for normal-size text:
+
+         --ink-muted  #8a8880     3.46:1   fails
+         --ink-wire   #6b6a65     5.28:1
+         --ink-2      #52514e     7.73:1
+
+     --ink-muted painted the branch names on the map, and a branch name is
+     load-bearing -- the map does not say which line is DE without it. It is
+     also INK_MUTED in five modules under src/viz/, so editing the hex would
+     move a grey in the print figures too.
+
+     Hence a second token for screen text rather than a change to the first.
+     Recessive at 300 dpi and recessive at 14 px on a backlit monitor are
+     different requirements; the register asks for recessive, not for one hex
+     in both media. --ink-muted still paints what is decorative -- a rule, a
+     disabled label, a line rather than a word. */
+  --ink-wire: #6b6a65;
+
   /* Okabe-Ito, in config bus order. Identity, not a ramp. */
   --hue-0: #0072b2;
   --hue-1: #e69f00;
@@ -130,6 +148,15 @@ button:hover {
   border-color: var(--ink-2);
 }
 
+/* Disabled, not hidden: a control that vanished on a one-hour day would make
+   the page's shape depend on the scenario. --ink-muted is correct here --
+   a disabled label is not text the reader acts on. */
+button:disabled {
+  color: var(--ink-muted);
+  border-color: var(--grid);
+  cursor: default;
+}
+
 .log {
   list-style: none;
   margin: 0;
@@ -195,7 +222,7 @@ button:hover {
 }
 
 .wire-label {
-  fill: var(--ink-muted);
+  fill: var(--ink-wire);
   dominant-baseline: middle;
 }
 
@@ -363,10 +390,82 @@ th:last-child { padding-right: 0; }
   outline-offset: 2px;
 }
 
+/* W2.7. The hour does not re-solve and the other levers do. Two encodings
+   carry that, neither a colour nor a weight -- colour is identity here, and
+   the register forbids bold:
+
+     a hollow thumb   the scenario levers have a filled one. Filled is a value
+                      the engine is being asked to answer for; hollow is a
+                      position in an answer already on the page.
+     ticks every 6 h  the interval the print figures put gridlines on for a
+                      24-hour series (CLAUDE.md, Construction).
+
+   The ticks are inset by half a thumb, 0.35rem of the 0.7rem one below, and
+   placed at
+
+       left = (v - min) / (max - min)      of what is left of the rail
+
+   A range input's travel is the track minus the thumb, so the thumb centre
+   never reaches either end of the track: without the inset, hour 24 would be
+   marked short of where the thumb stops. */
+
+.lever-scale { min-width: 0; }
+
+/* The hour row's columns are sized to their contents rather than to the panel
+   grid: its name column holds the transport, not a name, so it does not need
+   the 17ch a label does, and the rail takes everything between the transport
+   and the readout. This row's rail is therefore wider than the rails below
+   it and starts further left. The ticks are percentages of the rail's own
+   width and follow it. */
+.lever[data-kind="index"] {
+  grid-template-columns: max-content 1fr max-content;
+}
+
+.lever[data-kind="index"] input[type="range"]::-webkit-slider-thumb {
+  background: var(--surface);
+  border: 1.5px solid var(--ink-2);
+}
+
+.lever[data-kind="index"] input[type="range"]::-moz-range-thumb {
+  background: var(--surface);
+  border: 1.5px solid var(--ink-2);
+}
+
+.lever-ticks {
+  position: relative;
+  height: 0.3rem;
+  margin: -0.2rem 0.35rem 0;
+  /* The negative margin overlaps the input's box, so without this the ticks
+     would take clicks meant for the bottom of the track. */
+  pointer-events: none;
+}
+
+.lever-ticks span {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 0.3rem;
+  background: var(--grid);
+}
+
+/* The hour transport. It takes the name column, immediately left of the rail
+   it drives, in place of a label reading "Hour" under a legend reading
+   "Hour". The width is pinned because the label toggles Play/Pause, and a
+   button that changed size under the pointer would move its own target. */
+.lever-name:has(> button.transport) {
+  overflow: visible;
+  padding: 0.15rem 0;
+}
+
+button.transport {
+  min-width: 7ch;
+  text-align: center;
+}
+
 /* W2.6, the slack chooser. It spans the rail and the readout columns, because
    a bus name is the value and a position on a scale means nothing here.
 
-   THE CONTROL IS LEFT NATIVE. Only type, colour and the cursor are set; the
+   The control is left native. Only type, colour and the cursor are set; the
    border and the chevron are the platform's, the same as the armed-mode
    buttons above the map. Restyling it would mean appearance: none and a
    hand-drawn chevron -- more ink, drawn by this file, to look like the thing
@@ -394,6 +493,11 @@ th:last-child { padding-right: 0; }
 @media (max-width: 32rem) {
   .lever { grid-template-columns: 1fr 6ch; }
   .lever-name { grid-column: 1 / -1; }
+  /* Except the hour's, which holds the transport rather than a name. Stacked
+     like the others, Play took a full row and left the rail beneath it about
+     a third of the panel wide. */
+  .lever[data-kind="index"] .lever-name { grid-column: 1; }
+  .lever:not([data-kind="index"]) .lever-scale { grid-column: 1; }
   .lever select { grid-column: 1 / -1; }
 }
 
@@ -411,7 +515,8 @@ th:last-child { padding-right: 0; }
 
 /* The armed button. A filled chip rather than a heavier weight: the register
    forbids bold, and emphasis here comes from ground, not from type. */
-.toolbar button[aria-pressed="true"] {
+.toolbar button[aria-pressed="true"],
+button.transport[aria-pressed="true"] {
   background: var(--ink);
   border-color: var(--ink);
   color: var(--surface);

@@ -77,7 +77,7 @@ export function bodyFor(state) {
 
 /* Clear, price and settle one scenario.
  *
- * Takes EDITOR STATE, not a hand-built body. The slack goes on the wire
+ * Takes editor state, not a hand-built body. The slack goes on the wire
  * explicitly because the editor owns the bus list and owns keeping the two in
  * step; the engine's refusal of a slack that is not a bus is the check that
  * catches it failing to (W2.6).
@@ -95,8 +95,8 @@ export async function postClear(state, { signal } = {}) {
 
 /* ------------------------------------------------------------ coalescing
  *
- * A drag fires many solves and they return out of order, so THE LAST
- * RESPONSE IS NOT THE LAST REQUEST. A solve behind a slider is a live HiGHS
+ * A drag fires many solves and they return out of order, so the last
+ * response is not the last request. A solve behind a slider is a live HiGHS
  * call over a network: request n+1 can easily overtake request n on a
  * smaller topology, and a page that renders whatever arrived last will show
  * the prices of a network the visitor has already edited away from -- with
@@ -112,7 +112,7 @@ export async function postClear(state, { signal } = {}) {
  * that loses the race still lands as a stale id and is dropped by the same
  * rule.
  *
- * THIS IS NOT DEBOUNCING. Nothing is delayed, coalesced in time, or
+ * Nothing here is debounced. Nothing is delayed, coalesced in time, or
  * averaged. Every lever movement still solves, and the price flicker at a
  * degenerate breakpoint is kept and shown -- trap 3, and the single most
  * honest thing this site can demonstrate. What is dropped here is an answer
@@ -160,7 +160,7 @@ export function createSolver({ post = postClear, onPending = null } = {}) {
       error = err;
     }
 
-    // Checked AFTER the await and after the catch, so the two paths cannot
+    // Checked after the await and after the catch, so the two paths cannot
     // disagree about which request won.
     if (id <= applied) return { id, status: SUPERSEDED };
     applied = id;

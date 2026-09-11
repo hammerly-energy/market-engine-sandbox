@@ -1,17 +1,16 @@
 /* Editor state: the single source of truth the eight levers mutate.
  *
  * Nothing else in web/ holds state. A lever is a function from this object to
- * a new one, and every render reads from here -- so "what is on screen" and
- * "what would be posted" can never drift apart, which is the failure this
- * module exists to prevent.
+ * a new one, and every render reads from here, so "what is on screen" and
+ * "what would be posted" cannot drift apart.
  *
  *   state --toConfig()--> the exact dict shape of configs/w1.yaml --POST-->
  *            \--toLimits()--> clear()'s limits= argument
  *             \--coords stay here, and never cross the wire
  *
- * TWO THINGS ARE DELIBERATE AND BOTH ARE MARKET DECISIONS, NOT UI DETAILS.
+ * Two things here are market decisions rather than UI details.
  *
- * 1. toConfig ALWAYS emits load.source = "blocks". W1's fuzz measured it:
+ * 1. toConfig always emits load.source = "blocks". W1's fuzz measured it:
  *    over 120 random topologies, a mixed elastic/inelastic demand side was
  *    infeasible 31 times and an all-priced one 0 times, because d = 0, p = 0
  *    is feasible on any network. An editor that can build any topology while
@@ -19,7 +18,7 @@
  *    is an error message. So the editor emits only blocks -- see CLAUDE.md,
  *    "the editor emits only blocks configs".
  *
- * 2. The slack is carried in state and posted EXPLICITLY on every request,
+ * 2. The slack is carried in state and posted explicitly on every request,
  *    and it is written into network.slack too so the config and the argument
  *    cannot disagree. The editor owns the bus list, so a slack naming a
  *    deleted bus is a client bug and the engine's 422 is what catches it
@@ -56,7 +55,7 @@ export async function fetchSeed() {
 export function stateFromSeed(seed) {
   const config = seed.config;
   return {
-    /* Buses are an ORDERED list, not an object. Order is load-bearing: the
+    /* Buses are an ordered list, not an object. Order is load-bearing: the
        engine takes buses[0] when a recorded slack is gone, and colour is
        assigned by identity in config order. */
     buses: config.network.buses.map((name) => ({
@@ -80,7 +79,7 @@ export function stateFromSeed(seed) {
     shape: [...config.load.shape],
     slack: seed.slack,
     hour: seed.hour,
-    /* Line-rating overrides, line -> MW. NOT a config edit: clear() takes
+    /* Line-rating overrides, line -> MW. Not a config edit: clear() takes
        limits as its own argument, so the slider moves a rating without
        rewriting the scenario the rating belongs to. */
     limits: {},
@@ -92,7 +91,7 @@ export function stateFromSeed(seed) {
 
 /* ------------------------------------------------------- the defaults policy
  *
- * A DEFAULT IS A MARKET ASSUMPTION, NOT A UI DETAIL. Every one of these puts
+ * A default is a market assumption, not a UI detail. Every one of these puts
  * a number into an LP that a visitor did not type, so each is written down
  * with the reason it is that number and not another.
  *
@@ -115,12 +114,12 @@ export function stateFromSeed(seed) {
  *                  never in it -- either extreme would make adding a
  *                  generator look like it did nothing.
  *
- *   new bid        100 MW valued AT THE OFFER CAP, i.e. firm. The editor
+ *   new bid        100 MW valued at the offer cap, i.e. firm. The editor
  *                  emits only blocks, so new load must carry a price; the cap
  *                  outbids every generator and so reproduces inelastic load's
  *                  behaviour without inelastic load's infeasibility. Drop the
- *                  value below an LMP and the same bid becomes demand
- *                  response, which is the point of naming bids.
+ *                  value below an LMP and the same bid is demand
+ *                  response -- M9(a), in a line of config.
  */
 export const DEFAULT_REACTANCE_PU = 0.03;
 export const DEFAULT_GEN_COST_USD_PER_MWH = 25.0;
@@ -146,7 +145,7 @@ export function defaultBid(bus, offerCap) {
 /* ------------------------------------------------------------- the emitters */
 
 /* The config dict this state declares -- the same shape configs/*.yaml carry,
-   because scenario_from_config reads both and one code path is the point. */
+   because scenario_from_config reads both through one code path. */
 export function toConfig(state) {
   return {
     name: "web",
@@ -187,7 +186,7 @@ export function toLimits(state) {
 /* --------------------------------------------------------- the bound check
  *
  * Mirrors src/api/bounds.py so the editor can refuse before it posts. This is
- * a COURTESY, not the defence: bounds.py is the defence, it rejects rather
+ * a courtesy, not the defence: bounds.py is the defence, it rejects rather
  * than truncates, and it does not trust this file to have run. The codes are
  * the server's own, so one error surface (W2.2) renders both.
  *
