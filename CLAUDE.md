@@ -724,16 +724,103 @@ Dragging a line limit walks the LP through thresholds where it is degenerate,
 and there the price genuinely flickers between equally valid values on inputs
 a pixel apart. Trap 3. **Do not smooth it, debounce it away, or average it.**
 
-Show it. A price that is not unique is the single most honest thing this site
-can demonstrate, and it is invisible in every commercial tool a visitor has
-seen. The engine already has the right instinct — M0 asserts *bounds* at
-degenerate breakpoints rather than values — so the view should say `λ ∈ [20,
-35]` where the repo's own tests would.
+Show it. A price that is not unique is invisible in every commercial tool a
+visitor has seen, and the engine already has the right instinct — M0 asserts
+*bounds* at degenerate breakpoints rather than values, so a view that prints
+one number there is claiming more than the market said.
 
 That requires the engine to know it is degenerate, which it currently does
-not. Either detect it and return a flag, or accept that the site shows one
-arbitrary member of the set without comment. The first is better and is not
-free; decide before W3, not during.
+not. W2.9 settles the half of that which can be settled now.
+
+#### W2.9 decision: the flag lands, the interval waits
+
+**`clear()` returns a per-island, per-hour uniqueness flag. Whether the site
+ever prints the interval is deferred to W4.**
+
+They were one question all through W2 and they are not. The flag changes what
+the page claims — from "the price is $15" to "$15 is one of several" — and it
+is a count over fields `clear()` already returns, so it costs no extra solve.
+About an hour in `pricing.py` and its tests, built at the top of W3.
+
+The interval is a second optimization, and whether it earns its cost depends
+on something that does not exist yet: whether W4's narrative walks a visitor
+to a breakpoint deliberately, or whether a breakpoint is only ever stumbled
+into mid-drag. If the first, the interval is the payload and a flag undersells
+it. If the second, the flag is the whole job. Deciding that before the
+narrative is written is guessing, so the cost is measured below and the choice
+is left to W4.
+
+The degenerate case is reachable from the editor in one move. Measured on
+`configs/w1.yaml` with both line limits dragged to max, hour 8:
+
+```
+   alta        p =  40.0 /  40.0   at_max     rc =   1.0000
+   park_city   p = 170.0 / 170.0   at_max     rc =   0.0000
+   solitude    p =   0.0 / 520.0   off        rc = -15.0000
+   sundance    p =   0.0 / 200.0   off        rc = -25.0000
+   brighton    p = 600.0 / 600.0   at_max     rc =   5.0000
+
+   λ = 15.0000
+```
+
+Load lands exactly on 40 + 170 + 600 = 810 MW, and park_city is full and
+indifferent at once — the case `reduced_costs` already documents. The true
+answer is `λ ∈ [15, 30]`, and the total cost curve is where that is visible:
+sweeping the load at hour 8 gives a kink at 810, slope $15/MWh to its left and
+$30/MWh to its right, with λ equal to the slope on each side. A convex kink
+has no single slope, and the supporting slopes at it are the whole interval.
+
+```
+    load    served     cost $   λ        slope
+     790     790.0     8810.0   15.00    15.0000
+     809     809.0     9095.0   15.00    15.0000
+     810     810.0     9110.0   15.00    15.0000    <- kink
+     811     811.0     9140.0   30.00    30.0000
+     830     830.0     9710.0   30.00    30.0000
+```
+
+λ tracks that slope only because nothing is congested here and every LMP
+equals λ — measured, all five buses at $15.00 at that point. In general the
+derivative of cost with respect to load at a bus is that bus's LMP, and λ is
+the derivative at the slack, which is trap 2's statement in another form.
+
+**Detection is a count, per island and per hour:**
+
+```
+    basic = # generators strictly inside their bounds
+          + # bids strictly between 0 and their quantity
+
+    rows  = 1  +  # lines with mu != 0
+            ▲         ▲
+     the island's   each binding limit
+     balance row    is an active row
+```
+
+`basic < rows` means a row is held by a variable pinned at a bound, so the
+dual has room to move and λ is an interval. Hour 8 above is `basic = 0,
+rows = 1`. Every input is a field `clear()` already returns, which is what
+makes detection a count rather than a second solve — the same count is
+already written as `test_one_basic_unit_per_active_row`, where it is the
+uniqueness precondition W2.8's slack assertion depends on.
+
+Returning the interval is a second optimization and not a count: fix the
+primal at its optimum, then maximize and minimize λ over the dual feasible
+set. Two LPs per island-hour is 48 extra solves on case5, and the per-bus LMP
+interval is a further two per bus per hour.
+
+**The two directions are different sentences and must not collapse into one
+`degenerate` bool.** `basic > rows` is the other degeneracy: the price is
+unique and *who runs* is not. Measured, every offer set to $25 with both
+limits removed, λ = 25 under slack A and slack C alike, while alta and
+park_city sit off at `rc = 0.0000` and could swap in at no cost. That is the
+dispatch table under trap 2. It is also not a kink in the cost curve — it is
+a straight stretch of it carrying two dispatches at the same cost — so the
+curve above is a picture of the price ambiguity only, not of both.
+
+The flag inherits the flicker rather than curing it. It reads `|mu| > 1e-9`
+and the 1e-6 MW status tolerance in `generator_status`, so within a pixel of
+the breakpoint the flag itself moves. That is trap 3 one level up, and the
+rule above applies unchanged: do not smooth the flag either.
 
 ### Frontend stack
 
@@ -833,7 +920,7 @@ of 10*.
 | **W2.6** | The slack lever | 0.5 d | A dropdown over the bus list, posted explicitly on every request. **Deleting the slack bus moves the dropdown; it does not 422.** The editor owns keeping slack in step with its bus list, and the engine's refusal of a non-bus slack is the check that catches it failing to |
 | **W2.7** | The register fixes | 0.5 d | Three small things a usability review found, batched so the page is re-rendered and looked at once rather than three times. **Wire labels get their own screen token** — `--ink-muted` is 3.46:1 on the surface and branch names are load-bearing, not decorative; **the hour slider is visually distinct** from the four that re-solve, because that difference currently lives only in prose; **results sit above the levers**, so a moved slider does not land its answer below the fold. Half a day because CLAUDE.md requires rendering and inspecting each one, and moving one label routinely creates a collision somewhere else |
 | **W2.8** ✓ | Acceptance tests | 1 d | The slack assertion, **on a fixture whose optimum is verified unique first**: moving the slack rearranges λ and the congestion split while every LMP, payment, revenue and rent stays put. **`pytest.approx(abs=1e-9)`, not equality** — a different slack is a different LP and the cancellation leaves ~1e-13 on prices and ~1e-10 on payments (trap 2). Assert the other half too, that λ *moved* by a margin outside that tolerance, or the test passes on a build where the lever does nothing. On a degenerate fixture it flakes, correctly — trap 2 against trap 3. Plus the delete-the-slack test, and `toConfig()` round-tripping to w1.yaml's numbers bit for bit. Two things the row did not anticipate, both measured: **λ moves only where a line binds** — see trap 2 — and uniqueness is checkable from fields `clear()` already returns, so it is a test rather than a remark. The emitter is JavaScript, so its half runs in `web/check-emit.html` |
-| **W2.9** | The degeneracy decision | 0.5 d | Detect degeneracy and return a flag, so a view can say `λ ∈ [20, 35]` where the repo's own tests would — or accept that the site shows one arbitrary member of the set without comment. **Decided before W3, not during.** If it is "detect", that is an engine change and it is not free: scoped here, built at the top of W3 |
+| **W2.9** ✓ | The degeneracy decision | 0.5 d | **Decided: the flag lands, the interval waits.** `clear()` grows a per-island, per-hour uniqueness flag, read off fields it already returns at no extra solve — about an hour, built at the top of W3. Whether the site ever prints `λ ∈ [15, 30]` is deferred to W4, because it is a second optimization whose worth depends on a narrative that does not exist yet. The degenerate case is reachable from the editor in one move and was measured rather than assumed — see *W2.9 decision: the flag lands, the interval waits* |
 
 Two things W2 does not touch: the seven views (W3), and market arithmetic in
 JavaScript (never). If a lever needs a number `clear()` does not return,
