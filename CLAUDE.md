@@ -353,7 +353,8 @@ be checked against a list of what was already true.
 | Duplicates a bus or branch name | `ValueError` at `Scenario.__post_init__` | Clean |
 | Adds a bus with no generator and no load | Prices correctly. The bus gets a real LMP | **Not a bug.** Do not "fix" |
 | Adds a second line between two buses | Solves correctly | **Not a bug.** Parallel lines are physical |
-| Sets capacity below load | `RuntimeError: solve not optimal: infeasible` from `dispatch.py:235` | **The one real gap.** W1, and the answer is *elastic demand* — see below |
+| Sets capacity below load, demand priced | Sheds the least valuable MW, λ rises to the highest bid | Fixed at W1 — a scarcity price, not an error |
+| Sets capacity below load, demand inelastic | `RuntimeError: solve not optimal: infeasible` | The last refusal standing. Unreachable from the editor, which emits only `blocks` |
 | Sets all load to zero | Solves, `λ = -0.0` | Degenerate, not broken. Trap 3 |
 
 The pattern: **topology was hardened at M3 and economics was not.** The
@@ -533,10 +534,49 @@ Three properties, all tested:
 - **No price moves.** Every LMP is bit-identical across the fallback; only λ
   and the congestion split change, and they cancel exactly.
 
-All three W1 formulation questions are now answered. What remains of W1 is the
-fuzz test over random topologies — the deliverable that proves *What the
-engine already refuses* is complete rather than merely the cases someone
-thought of.
+### W1 deliverable: the topology fuzz
+
+`tests/test_w1_fuzz_topology.py` builds random networks from the moves the
+editor has — add a bus, connect a line, add a generator, price a bid, name a
+slack — and asserts that each one returns **either a priced solve satisfying
+every invariant, or one named reason from a closed list**. 120 seeds, no new
+dependency; a failure names its seed and rerunning that seed reproduces it.
+
+The second half of the file asserts **the corpus itself**, and that is what
+stops the first half being theatre: a fuzz that happened to generate only
+connected five-bus networks would satisfy every assertion and test none of
+the cases W1 exists for. So it is asserted to actually contain disconnected
+networks, three-or-more islands, isolated buses, empty buses, parallel
+branches, curtailment, a binding line, and each named refusal.
+
+It found a real bug on its first run. **An island containing no generator, no
+priced bid and no inelastic load makes `0 == 0`** — a Python bool, not a
+Pyomo expression — and Pyomo refuses to build the model with a message about
+`Constraint.Feasible` that says nothing about a network. Two cases, two
+meanings, both now resolved in `_balance` where the meaning is still visible:
+vacuous is `Constraint.Feasible`, while inelastic load in an island with
+nothing to serve it is `Constraint.Infeasible` and reaches the caller as the
+named infeasibility.
+
+**And it settled the open W2 question.** With every bid elastic, `d = 0` and
+`p = 0` is feasible for any topology — zero injections, zero flows, every
+limit satisfied — so a priced demand side cannot be infeasible on capacity.
+That is now proved over 120 random networks rather than reasoned about:
+
+| corpus | priced | infeasible |
+|---|---|---|
+| mixed elastic/inelastic | 59 / 120 | **31** |
+| every bid priced | 90 / 120 | **0** |
+
+So **the editor emits only `blocks` configs.** Inelastic demand on a random
+topology is infeasible more often than not, and an editor that can build any
+topology while insisting its load must be served is an editor whose most
+ordinary move is an error message. The other refusals are untouched by this:
+a one-bus network still has no network to price, and an empty fleet still has
+nothing to dispatch. Those are statements about the scenario, not about
+whether the market clears.
+
+All three W1 formulation questions are answered and the deliverable is in.
 
 ### Degeneracy under a moving slider
 

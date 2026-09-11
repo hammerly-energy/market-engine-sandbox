@@ -311,11 +311,32 @@ def solve_dispatch_network_day(c, Pmax, D, gen_bus, buses, PTDF, Fmax, islands,
     #    the same at every bus, which is exactly the energy component.
     def _balance(m, s, t):
         inside = set(islands[s])
-        return (
-            sum(m.p[g, t] for g in m.G if gen_bus[g] in inside)
-            == sum(D[i].get(t, 0.0) for i in inside)
+        made = sum(m.p[g, t] for g in m.G if gen_bus[g] in inside)
+        took = (
+            sum(D[i].get(t, 0.0) for i in inside)
             + sum(m.d[k, t] for k in m.K if bid_bus[k] in inside)
         )
+        row = made == took
+
+        # An island can contain no variables at all, and then `made == took`
+        # is arithmetic on two plain numbers and evaluates to a Python bool
+        # rather than to a Pyomo expression. Pyomo refuses to build either
+        # one, with a message about Constraint.Feasible that says nothing
+        # about the network -- so both cases are resolved HERE, where the
+        # meaning is still visible. Found by the topology fuzz, not by hand.
+        if row is True:
+            # Nothing in this island: no generator, no priced bid, and no
+            # inelastic load either. The row is vacuous, and a vacuous row is
+            # satisfied, not absent -- the island still gets its lambda.
+            return pyo.Constraint.Feasible
+        if row is False:
+            # Inelastic load in an island with no generation and no bid to
+            # shed. Genuinely infeasible: demand that MUST be served, and
+            # nothing on the other side of the line -- because there is no
+            # line. Saying so here is what makes the solver report it as
+            # infeasible instead of Pyomo refusing to build the model.
+            return pyo.Constraint.Infeasible
+        return row
 
     m.balance = pyo.Constraint(m.I, m.T, rule=_balance)
 
