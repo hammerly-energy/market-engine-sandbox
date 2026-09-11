@@ -1,0 +1,80 @@
+/* Design tokens, copied from src/viz/network.py so a bus is the same hue on
+   screen as it is in the PDF. Colour is assigned by identity in a fixed
+   order and never cycled -- see CLAUDE.md, Interactive figure register. */
+
+:root {
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --ink-muted: #8a8880;
+  --grid: #e7e6e2;
+
+  /* Okabe-Ito, in config bus order. Identity, not a ramp. */
+  --hue-0: #0072b2;
+  --hue-1: #e69f00;
+  --hue-2: #009e73;
+  --hue-3: #cc79a7;
+  --hue-4: #56b4e9;
+
+  --flow-neg: #104281;
+  --flow-pos: #a8380f;
+
+  /* One typographic hierarchy, strictly ordered. The print figure's
+     10.5 / 9.5 / 8.5 pt, carried over at browser scale. */
+  --type-title: 1.05rem;
+  --type-label: 0.95rem;
+  --type-annot: 0.875rem;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 1.5rem;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: var(--type-label);
+  line-height: 1.5;
+}
+
+h1 {
+  font-size: var(--type-title);
+  font-weight: 500;
+  margin: 0 0 0.25rem;
+}
+
+.subhead {
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+  margin: 0 0 1.5rem;
+  max-width: 60ch;
+}
+
+.panel {
+  border: 1px solid var(--grid);
+  border-radius: 3px;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1rem;
+  max-width: 60ch;
+}
+
+.panel h2 {
+  font-size: var(--type-label);
+  font-weight: 500;
+  margin: 0 0 0.6rem;
+}
+
+dl.kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.15rem 1.25rem;
+  margin: 0;
+  font-size: var(--type-annot);
+}
+
+dl.kv dt { color: var(--ink-2); }
+dl.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+.status { font-size: var(--type-annot); color: var(--ink-muted); }
+.status[data-state="error"] { color: var(--flow-pos); }

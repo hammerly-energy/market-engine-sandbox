@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Market engine — nodal clearing sandbox</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <h1>Market engine</h1>
+  <p class="subhead">
+    A nodal DC market clearing engine. LP dispatch, duals as prices. Five
+    synthetic generators on a five-bus teaching case, cost-based offers. No
+    unit commitment, no storage, no reserves.
+  </p>
+
+  <section class="panel">
+    <h2>Server limits</h2>
+    <dl class="kv" id="limits"></dl>
+    <p class="status" id="status">Contacting server…</p>
+  </section>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

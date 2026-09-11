@@ -22,10 +22,12 @@ a public URL is an information leak, not an error message.
 
 import json
 import os
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from src.api import bounds, wire
 from src.api.bounds import BadRequest
@@ -154,3 +156,19 @@ async def post_clear(request: Request):
         return _error(BadRequest("solve_failed", str(exc)))
 
     return wire.encode(cleared)
+
+
+# ------------------------------------------------------------------- the page
+# Mounted LAST, and that ordering is load-bearing. A mount at "/" catches every
+# path, so it must be registered after /health, /limits and /clear or it would
+# shadow them -- Starlette matches routes in registration order.
+#
+# Serving the editor from this process means the browser and the solver share
+# an origin, so the CORS middleware above is not what makes the site work; it
+# is there for a deploy that puts the static files somewhere else.
+#
+# The directory is resolved from this file, not from the working directory, so
+# `uvicorn src.api.app:app` works from anywhere in the repo.
+WEB_DIR = Path(__file__).resolve().parents[2] / "web"
+if WEB_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
