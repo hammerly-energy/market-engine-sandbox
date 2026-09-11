@@ -19,6 +19,19 @@ Therefore:
 - Do write scaffolding, data ingestion, tests, and plotting code — that's not the part worth learning by hand.
 - When explaining a new concept, include a diagram or visual, not just prose.
 
+## How to talk to me
+
+I have ADHD, and I want every response in this repo shaped for it. **Invoke the
+`i-have-adhd` skill at the start of a session and stay in it** — I should not
+have to type `/i-have-adhd` each time. In short: lead with the action, number
+multi-step work, restate where we are every turn, give concrete time estimates,
+no preamble and no closing pleasantries.
+
+The skill's own exceptions still apply, and two of them matter constantly here:
+**"explain" means explain in full** — a formulation walkthrough runs as long as
+the concept needs — and a **destructive action gets confirmed before it runs**,
+brevity notwithstanding.
+
 ## Core mechanics a contributor must understand
 
 **Prices are dual variables.** The dual on the energy balance constraint is the marginal cost of serving one more MW. That is the price. It is not computed by a pricing rule; it falls out of the optimization.
