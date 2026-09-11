@@ -78,3 +78,22 @@ dl.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
 
 .status { font-size: var(--type-annot); color: var(--ink-muted); }
 .status[data-state="error"] { color: var(--flow-pos); }
+
+.panel.wide { max-width: 68ch; }
+
+pre {
+  margin: 0;
+  font-size: var(--type-annot);
+  line-height: 1.45;
+  color: var(--ink-2);
+  overflow-x: auto;
+  tab-size: 2;
+}
+
+summary {
+  cursor: pointer;
+  font-size: var(--type-label);
+  color: var(--ink);
+}
+
+summary + pre { margin-top: 0.6rem; }

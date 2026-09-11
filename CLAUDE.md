@@ -674,6 +674,30 @@ is demonstrably true.
 | **W3** | The views | Network map with buses coloured by LMP; LMP split into λ + congestion; merit-order stack; settlement ledger with the residual; line flows against limits; live generation by unit; 24-hour heatmap. Three of these need fields `clear()` does not yet return — **add them in W0, not mid-W3**: a per-bus `congestion[bus, hour]`, which `pricing.py` already computes and then discards; per-generator `cost` and `pmax`, without which no merit-order stack can be drawn; and per-generator **status** (`off` / `interior` / `at_max`) with its `headroom` and `reduced_cost`. Status, *not* "the marginal unit" — that field was written at W0 and replaced within the hour, because under congestion there is no single marginal unit and three of case5's five buses have an LMP equal to no offer at all. Bus *coordinates* are not an engine concern at all — they are editor state, and they belong to W2. | Every number on screen is traceable to a field of the `clear()` return. Nothing is recomputed in JavaScript — the browser formats and draws, it does not do market arithmetic. The residual is displayed, not hidden, because a visible `≈ 0` is the claim the whole repo rests on. | 1 week |
 | **W4** | The frame and the deploy | Narrative scroll, one section per engine milestone, each with its live figure and a link to the source that implements it. Equations rendered next to the code. Scope statement. Deployed. | A stranger can reach it at a URL, rewire the network, and leave understanding that λ is a dual variable. The scope statement is on the page, not in a footer. | 3 days |
 
+#### W2, phase by phase
+
+W2 is the one milestone big enough to need its own ladder, so it has one. Ten
+phases summing to the 8.5 days the row is budgeted at. A phase is done when
+the page still loads and the suite still passes; report progress as *phase n
+of 10*.
+
+| | Phase | Est. | What lands, and the one thing that can go quietly wrong |
+|---|---|---|---|
+| **W2.0** ✓ | Serve the page | 0.5 d | `web/` skeleton, plain ES modules, no toolchain. `StaticFiles` mounted at `/` **registered last**, or the mount shadows `/clear` and the failure looks like a frontend bug for an afternoon |
+| **W2.1** | Editor state | 1 d | The single source of truth the eight levers mutate; nothing else in the frontend holds state. `{buses: [{name, x, y}], branches, fleet, bids, shape, slack, hour, limits}`. **Coordinates are editor state and never cross the wire.** `toConfig()` emits w1.yaml's exact dict and **always `load.source: blocks`**. The **defaults policy** is written down, because a default is a market assumption wearing a UI detail's clothes. Client-side bound check against `/limits`, refusing before it posts — a courtesy, not the defence |
+| **W2.2** | Transport | 0.5 d | `postClear(state)`, and **request coalescing**: a monotonic id per request, stale responses dropped. A drag fires many solves and they return out of order, so the last response is not the last request. This is *not* debouncing the price — the flicker at a degenerate breakpoint is kept and shown (trap 3). Error surface switches on the stable code and prints `detail` verbatim |
+| **W2.3** | Minimal render | 1 d | Enough feedback to prove a lever worked, and no more: hand-written SVG buses and branches, a readout of LMP per bus, λ per island, and the settlement residual. Formatted only. **The seven views are W3 — do not build them here** |
+| **W2.4** | The five non-drag levers | 1 d | Line limit → the `limits` override, which is an argument to `clear()` and not a config edit. Peak load per bus, generator capacity, marginal cost. Hour 1–24 indexes the returned arrays and does **not** re-solve; the day comes back whole |
+| **W2.5** | The three drag levers | 2 d | Add/remove bus, connect/cut line, add/remove generator. Hit-testing by hand in SVG. **This is where the plan overruns.** Checkpoint at the end of its second day: if drag is still fighting you, adopt a framework for the editor alone. That retreat is correct on day 2 and worthless on day 9 |
+| **W2.6** | The slack lever | 0.5 d | A dropdown over the bus list, posted explicitly on every request. **Deleting the slack bus moves the dropdown; it does not 422.** The editor owns keeping slack in step with its bus list, and the engine's refusal of a non-bus slack is the check that catches it failing to |
+| **W2.7** | Undo | 0.5 d | Snapshot stack of editor state, pushed on every mutation. Reset-to-case5 |
+| **W2.8** | Acceptance tests | 1 d | The slack assertion, **on a fixture whose optimum is verified unique first**: moving the slack rearranges λ and the congestion split while every LMP, payment, revenue and rent stays bit-identical. On a degenerate fixture it flakes, correctly — trap 2 against trap 3. Plus the delete-the-slack test, and `toConfig()` round-tripping to w1.yaml's numbers bit for bit |
+| **W2.9** | The degeneracy decision | 0.5 d | Detect degeneracy and return a flag, so a view can say `λ ∈ [20, 35]` where the repo's own tests would — or accept that the site shows one arbitrary member of the set without comment. **Decided before W3, not during.** If it is "detect", that is an engine change and it is not free: scoped here, built at the top of W3 |
+
+Two things W2 does not touch: the seven views (W3), and market arithmetic in
+JavaScript (never). If a lever needs a number `clear()` does not return,
+`clear()` grows.
+
 Do not skip to a later milestone. Each one's test suite is the foundation for the
 next, and the invariants established early are what catch the subtle failures
 later.

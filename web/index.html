@@ -15,9 +15,21 @@
   </p>
 
   <section class="panel">
-    <h2>Server limits</h2>
+    <h2>Editor state</h2>
+    <dl class="kv" id="editor"></dl>
+  </section>
+
+  <section class="panel">
+    <h2>Against the server caps</h2>
     <dl class="kv" id="limits"></dl>
     <p class="status" id="status">Contacting server…</p>
+  </section>
+
+  <section class="panel wide">
+    <details>
+      <summary id="body-summary">What would be posted</summary>
+      <pre id="body">…</pre>
+    </details>
   </section>
 
   <script type="module" src="js/main.js"></script>

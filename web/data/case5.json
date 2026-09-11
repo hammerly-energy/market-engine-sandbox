@@ -1,0 +1,155 @@
+{
+  "provenance": "configs/w1.yaml, restated as JSON. The config block is that file field for field and tests/test_w2_editor.py asserts it, because two copies of a scenario is exactly how the page ends up pricing a network the repo does not test. coords and market are NOT config: coordinates are editor state and never cross the wire (CLAUDE.md assigns bus x/y to W2), and market carries the one number the defaults policy needs to read rather than hardcode.",
+  "market": {
+    "offer_cap_usd_per_mwh": 5000.0,
+    "provenance": "ERCOT system-wide offer cap. It MOVES -- it was $9000/MWh before the 2021 legislation -- so it is data here and in configs/w1.yaml, and a constant in neither engine nor editor."
+  },
+  "slack": "D",
+  "hour": 0,
+  "coords": {
+    "A": {
+      "x": 17.7,
+      "y": 39.5
+    },
+    "B": {
+      "x": 50.0,
+      "y": 16.0
+    },
+    "C": {
+      "x": 82.3,
+      "y": 39.5
+    },
+    "D": {
+      "x": 70.0,
+      "y": 77.5
+    },
+    "E": {
+      "x": 30.0,
+      "y": 77.5
+    }
+  },
+  "config": {
+    "name": "case5",
+    "network": {
+      "slack": "D",
+      "buses": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E"
+      ],
+      "branches": {
+        "AB": {
+          "from": "A",
+          "to": "B",
+          "reactance_pu": 0.0281,
+          "limit_mw": 400.0
+        },
+        "AD": {
+          "from": "A",
+          "to": "D",
+          "reactance_pu": 0.0304,
+          "limit_mw": "inf"
+        },
+        "AE": {
+          "from": "A",
+          "to": "E",
+          "reactance_pu": 0.0064,
+          "limit_mw": "inf"
+        },
+        "BC": {
+          "from": "B",
+          "to": "C",
+          "reactance_pu": 0.0108,
+          "limit_mw": "inf"
+        },
+        "CD": {
+          "from": "C",
+          "to": "D",
+          "reactance_pu": 0.0297,
+          "limit_mw": "inf"
+        },
+        "DE": {
+          "from": "D",
+          "to": "E",
+          "reactance_pu": 0.0297,
+          "limit_mw": 240.0
+        }
+      }
+    },
+    "fleet": {
+      "alta": {
+        "bus": "A",
+        "cost_usd_per_mwh": 14.0,
+        "pmax_mw": 40.0
+      },
+      "park_city": {
+        "bus": "A",
+        "cost_usd_per_mwh": 15.0,
+        "pmax_mw": 170.0
+      },
+      "solitude": {
+        "bus": "C",
+        "cost_usd_per_mwh": 30.0,
+        "pmax_mw": 520.0
+      },
+      "sundance": {
+        "bus": "D",
+        "cost_usd_per_mwh": 40.0,
+        "pmax_mw": 200.0
+      },
+      "brighton": {
+        "bus": "E",
+        "cost_usd_per_mwh": 10.0,
+        "pmax_mw": 600.0
+      }
+    },
+    "load": {
+      "source": "blocks",
+      "bids": {
+        "B_firm": {
+          "bus": "B",
+          "peak_mw": 300.0,
+          "value_usd_per_mwh": 5000.0
+        },
+        "C_firm": {
+          "bus": "C",
+          "peak_mw": 300.0,
+          "value_usd_per_mwh": 5000.0
+        },
+        "D_firm": {
+          "bus": "D",
+          "peak_mw": 400.0,
+          "value_usd_per_mwh": 5000.0
+        }
+      },
+      "shape": [
+        0.56,
+        0.53,
+        0.51,
+        0.5,
+        0.52,
+        0.58,
+        0.66,
+        0.73,
+        0.81,
+        0.86,
+        0.89,
+        0.91,
+        0.92,
+        0.93,
+        0.91,
+        0.89,
+        0.93,
+        0.97,
+        1.0,
+        0.98,
+        0.9,
+        0.78,
+        0.69,
+        0.58
+      ]
+    }
+  }
+}

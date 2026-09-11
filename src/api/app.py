@@ -98,6 +98,7 @@ def limits():
         "max_buses": bounds.MAX_BUSES,
         "max_branches": bounds.MAX_BRANCHES,
         "max_generators": bounds.MAX_GENERATORS,
+        "max_bids": bounds.MAX_BIDS,
         "max_hours": bounds.MAX_HOURS,
         "load_sources": list(bounds.ALLOWED_LOAD_SOURCES),
     }
