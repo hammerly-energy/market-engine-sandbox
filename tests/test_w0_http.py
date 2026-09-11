@@ -102,7 +102,8 @@ class TestWireFidelity:
 
     @pytest.mark.parametrize(
         "field",
-        ["dispatch", "flows", "mu", "lmp", "congestion", "headroom", "reduced_cost"],
+        ["dispatch", "flows", "mu", "lmp", "congestion", "headroom",
+         "reduced_cost", "served", "bid_mw"],
     )
     def test_every_series_matches_the_in_process_result(
         self, over_http, in_process, field
@@ -122,6 +123,8 @@ class TestWireFidelity:
             "congestion": over_http["buses"],
             "headroom": over_http["generators"],
             "reduced_cost": over_http["generators"],
+            "served": over_http["bids"],
+            "bid_mw": over_http["bids"],
         }[field]
         assert set(names) == {n for n, _ in in_process[field]}
         for n in names:
@@ -429,19 +432,97 @@ class TestGeneratorStatus:
             assert set(series) <= allowed
 
 
+# ------------------------------------------------------------- the demand side
+
+
+class TestDemandSide:
+    """A market that can decline to serve someone, seen over HTTP.
+
+    W1 answered the question W0 could only name: what does the engine say
+    when load cannot be served? It says the last MW was worth $5000 to
+    somebody who did not get it. What this class checks is that the answer
+    SURVIVES THE WIRE -- a 200 with a scarcity price on it, and the gap
+    between what was asked for and what was served visible rather than
+    implied.
+    """
+
+    @pytest.fixture(scope="class")
+    def w1_config(self):
+        return as_wire(load_config("configs/w1.yaml"))
+
+    @pytest.fixture(scope="class")
+    def short(self, client, w1_config):
+        """case5's day with every unit capped at 50 MW. 250 of 1000 MW."""
+        config = json.loads(json.dumps(w1_config))
+        for spec in config["fleet"].values():
+            spec["pmax_mw"] = 50.0
+        r = client.post("/clear", json={"config": config})
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    def test_a_shortfall_is_a_priced_solve_not_an_error(self, short):
+        """The W1 goal, over HTTP. No 4xx, no traceback -- a price."""
+        t = short["hours"].index(PEAK_HOUR)
+        assert short["lmbda"][t] == pytest.approx(5000.0)
+        assert all(short["lmp"][b][t] == pytest.approx(5000.0) for b in short["buses"])
+
+    def test_curtailment_is_visible_and_not_implied(self, short):
+        """asked vs served, per bid. A view without this shows a market that
+        always clears, which is exactly what W1 stopped being true."""
+        t = short["hours"].index(PEAK_HOUR)
+        asked = sum(short["bid_mw"][k][t] for k in short["bids"])
+        served = sum(short["served"][k][t] for k in short["bids"])
+        assert asked == pytest.approx(1000.0)
+        assert 0 < served < asked
+
+    def test_the_residual_is_still_zero_in_a_short_hour(self, short):
+        """Billed on what load took, not what it asked for."""
+        for r in short["settlement"]["residual"]:
+            assert r == pytest.approx(0.0, abs=1e-6)
+
+    def test_an_inelastic_bid_crosses_as_a_null_value(self, client, m4_config):
+        """None is a claim -- must be served, no walk-away price -- and not a
+        missing number. configs/m4.yaml's profile source is inelastic."""
+        body = client.post("/clear", json={"config": m4_config}).json()
+        assert set(body["bids"]) == {"B_load", "C_load", "D_load"}
+        assert all(v is None for v in body["bid_value"].values())
+        assert body["benefit"] == pytest.approx(0.0)
+
+    def test_a_priced_bid_crosses_with_its_value(self, client, w1_config):
+        body = client.post("/clear", json={"config": w1_config}).json()
+        assert body["bid_value"] == {"B_firm": 5000.0, "C_firm": 5000.0,
+                                     "D_firm": 5000.0}
+        assert body["bid_bus"]["B_firm"] == "B"
+
+    def test_the_blocks_source_matches_the_profile_source_over_http(
+        self, client, w1_config, m4_config
+    ):
+        """configs/w1.yaml restates configs/m4.yaml. Bit-identical, on the
+        wire as in process -- the control the demand side is measured against."""
+        blocks = client.post("/clear", json={"config": w1_config}).json()
+        profile = client.post("/clear", json={"config": m4_config}).json()
+        for bus in profile["buses"]:
+            assert blocks["lmp"][bus] == pytest.approx(profile["lmp"][bus])
+        assert blocks["cost"] == pytest.approx(profile["cost"])
+
+
 # -------------------------------------------------------------- provisional
 
 
 class TestProvisional:
-    """Holds until W1, and is written to fail loudly when W1 lands.
+    """Holds only for INELASTIC demand, and W1 narrowed it to that.
 
-    W1 decides what a market says when load cannot be served: refuse, or admit
-    a scarcity price and let lambda rise to it. Both are real market designs
-    and the choice belongs in the engine. What W0 owes is only that the answer
-    today is a named 4xx rather than a traceback.
+    A scenario whose bids are priced can always decline to serve them, so it
+    cannot be infeasible on capacity. A scenario using the profile or static
+    source cannot -- its demand must be served -- and there the old
+    RuntimeError still stands. What W0 owes is that it arrives as a named 4xx
+    and never as a traceback.
+
+    This goes away entirely if the editor is settled as emitting only blocks
+    configs, which is a W2 decision and is not made yet.
     """
 
-    def test_too_little_capacity_is_named_not_traced(self, client, m4_config):
+    def test_inelastic_demand_can_still_be_infeasible(self, client, m4_config):
         config = json.loads(json.dumps(m4_config))
         for spec in config["fleet"].values():
             spec["pmax_mw"] = 1.0

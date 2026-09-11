@@ -48,6 +48,18 @@ def _num(x):
     return x
 
 
+def _nullable(x):
+    """A number that is allowed to be absent. None crosses as null.
+
+    Only bid_value uses this. None there means INELASTIC -- a bid that must
+    be served and therefore has no price at which it would walk away -- and
+    that is a claim, not a missing value. Coercing it to a number would
+    invent a willingness to pay; dropping the key would make the frontend
+    guess from the key's absence.
+    """
+    return None if x is None else _num(x)
+
+
 def _series(keyed, names, hours):
     """{(name, hour): value} -> {name: [value per hour]}, aligned to hours."""
     return {n: [_num(keyed[n, t]) for t in hours] for n in names}
@@ -68,6 +80,7 @@ def encode(cleared):
     lines = list(cleared["lines"])
     gens = list(cleared["gen_bus"])
 
+    bids = list(cleared["bid_bus"])
     settlement = cleared["settlement"]
     fields = ("payments", "revenue", "congestion_rent", "rent_from_duals", "residual")
 
@@ -96,7 +109,19 @@ def encode(cleared):
         "lmp": _series(cleared["lmp"], buses, hours),
         "congestion": _series(cleared["congestion"], buses, hours),
         "lmbda": [_num(cleared["lmbda"][t]) for t in hours],
+        "bids": bids,
+        "bid_bus": dict(cleared["bid_bus"]),
+        # null means inelastic: must be served, no price at which it walks.
+        "bid_value": {k: _nullable(v) for k, v in cleared["bid_value"].items()},
+        # What each bid ASKED for, against what it GOT. Equal for every bid
+        # in an unconstrained hour; the gap is curtailment, and it is the
+        # only place on the wire where a market declining to serve someone is
+        # visible. A view that shows demand without showing this shows a
+        # market that always clears, which is the thing W1 stopped being true.
+        "bid_mw": _series(cleared["bid_mw"], bids, hours),
+        "served": _series(cleared["served"], bids, hours),
         "cost": _num(cleared["cost"]),
+        "benefit": _num(cleared["benefit"]),
         # Column arrays, same alignment rule as every other series. The
         # residual is here and is meant to be displayed: it is the claim the
         # repo rests on, and a site that hides it is doing the thing this repo
