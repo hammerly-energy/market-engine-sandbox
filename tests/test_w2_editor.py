@@ -445,3 +445,264 @@ class TestTheRenderHasEveryNumberItNeeds:
         response. They are keyed the same, so the readout cannot list a bus
         the picture does not show."""
         assert set(cleared["lmp"]) == set(seed["config"]["network"]["buses"])
+
+
+# --------------------------------------------------------------------- W2.4
+# The five levers that are not a drag: line limit, peak load, generator
+# capacity, generator offer, and the hour.
+#
+# Four of them change the scenario and are answered by a solve. THE HOUR IS
+# NOT, and that is the phase: clear() returns the whole day, so the hour is an
+# index into an answer already in the browser. What can rot silently is the
+# alignment between what the slider can reach and what the response carries --
+# a slider whose top is 24 against a response of 12 hours prints `undefined`
+# where a price belongs, with no error anywhere.
+#
+# The sliders themselves are JavaScript and there is no runtime here, so what
+# is asserted is (1) the engine's half of each lever, provoked over HTTP the
+# way the editor provokes it, and (2) the slider DOMAINS, parsed out of
+# controls.js -- because a domain that cannot represent the seed silently
+# clamps or snaps the scenario the first time a visitor touches it.
+
+CONTROLS_JS = Path("web/js/controls.js")
+
+
+def _js_const(name):
+    """A numeric `const NAME = 123;` out of controls.js.
+
+    Parsed rather than imported, for the same reason _known_codes is: there is
+    no JavaScript runtime in this environment. Fails loudly if the constant
+    stops being a plain number, which is the only way it could move without
+    this noticing.
+    """
+    m = re.search(rf"^const {name} = (-?[\d.]+);", CONTROLS_JS.read_text(), re.M)
+    assert m, f"{name} is not a plain numeric const in controls.js"
+    return float(m.group(1))
+
+
+def _post(client, seed, **over):
+    body = {"config": seed["config"], "slack": seed["slack"], "limits": None}
+    config = json.loads(json.dumps(seed["config"]))
+    body["config"] = config
+    for key, value in over.items():
+        if key == "limits":
+            body["limits"] = value
+        elif key == "fleet":
+            for gen, fields in value.items():
+                config["fleet"][gen].update(fields)
+        elif key == "bids":
+            for bid, fields in value.items():
+                config["load"]["bids"][bid].update(fields)
+        else:
+            raise AssertionError(key)
+    r = client.post("/clear", json=body)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+class TestTheLineLimitLeverIsAnArgumentAndNotAConfigEdit:
+    """clear() takes limits as its own argument, so the slider moves a rating
+    without rewriting the scenario the rating belongs to. That is what makes
+    dropping the override restore the original exactly -- and it is why
+    toLimits() may emit null rather than having to remember what it replaced.
+    """
+
+    def test_the_override_changes_the_price(self, client, seed):
+        # DE is rated 240 MW and binds in case5. Squeezing it must move a
+        # price, or the lever is wired to nothing.
+        base = _post(client, seed)
+        tight = _post(client, seed, limits={"DE": 100.0})
+        assert tight["lmp"] != base["lmp"]
+
+    def test_the_engine_reports_the_rating_it_used(self, client, seed):
+        """The readout beside the slider is the slider's own position, but
+        the rating the market was cleared against comes back on the wire --
+        so a lever that failed to reach the engine is visible rather than
+        merely believed."""
+        tight = _post(client, seed, limits={"DE": 100.0})
+        assert tight["limits"]["DE"] == 100.0
+
+    def test_the_unlimited_notch_unbinds_the_line(self, client, seed):
+        """The top of the slider writes null, which crosses as "inf".
+
+        Not a large finite number: an unrated line is what the scenario says,
+        and a 1000 MW line that happens never to bind is a different claim.
+        With no rating, mu on that line is zero in every hour.
+        """
+        opened = _post(client, seed, limits={"DE": "inf"})
+        assert opened["limits"]["DE"] is None  # wire spelling of infinity
+        assert all(m == 0.0 for m in opened["mu"]["DE"])
+
+    def test_dropping_the_override_restores_the_scenario_exactly(self, client, seed):
+        base = _post(client, seed)
+        _post(client, seed, limits={"DE": 100.0})
+        assert _post(client, seed, limits=None)["lmp"] == base["lmp"]
+
+
+class TestTheGeneratorLevers:
+    def test_zero_capacity_stops_the_unit(self, client, seed):
+        out = _post(client, seed, fleet={"brighton": {"pmax_mw": 0.0}})
+        assert all(p == 0.0 for p in out["dispatch"]["brighton"])
+
+    def test_capacity_comes_back_on_the_wire(self, client, seed):
+        """gen_pmax and gen_cost are returned, so the merit-order stack of W3
+        can be drawn without the browser holding a second copy of the fleet."""
+        out = _post(client, seed, fleet={"brighton": {"pmax_mw": 250.0}})
+        assert out["gen_pmax"]["brighton"] == 250.0
+
+    def test_raising_an_offer_above_the_next_unit_reprices_the_market(self, client, seed):
+        """brighton is the cheapest unit at $10. Offered above solitude's $30
+        it stops being the marginal resource anywhere, and a price moves."""
+        base = _post(client, seed)
+        dear = _post(client, seed, fleet={"brighton": {"cost_usd_per_mwh": 35.0}})
+        assert dear["gen_cost"]["brighton"] == 35.0
+        assert dear["lmp"] != base["lmp"]
+
+    def test_an_offer_the_slider_can_reach_still_clears(self, client, seed):
+        """The top of the offer slider, on every unit at once. It must price,
+        not refuse -- a lever that can produce an error at its own end is a
+        lever with an unreachable half."""
+        top = _js_const("COST_MAX_USD")
+        out = _post(
+            client,
+            seed,
+            fleet={g: {"cost_usd_per_mwh": top} for g in seed["config"]["fleet"]},
+        )
+        assert all(abs(r) < 1e-6 for r in out["settlement"][seed["slack"]]["residual"])
+
+
+class TestTheDemandLever:
+    def test_a_bid_at_zero_asks_for_nothing(self, client, seed):
+        out = _post(client, seed, bids={"D_firm": {"peak_mw": 0.0}})
+        assert all(q == 0.0 for q in out["bid_mw"]["D_firm"])
+
+    def test_every_bid_at_zero_is_degenerate_not_broken(self, client, seed):
+        """All load zero: the engine solves and lambda sits at -0.0.
+
+        CLAUDE.md lists this under what the engine already refuses as
+        "degenerate, not broken". The slider's bottom end reaches it, so it is
+        asserted rather than assumed.
+        """
+        out = _post(
+            client, seed, bids={b: {"peak_mw": 0.0} for b in seed["config"]["load"]["bids"]}
+        )
+        assert all(p == 0.0 for p in out["dispatch"]["brighton"])
+
+    def test_more_load_than_the_fleet_can_serve_sheds_rather_than_refusing(
+        self, client, seed
+    ):
+        """The editor emits only priced blocks, so scarcity is a price and not
+        an error (W1). The demand slider is the most likely way a visitor
+        reaches it, so this is the lever's real acceptance test."""
+        cap = seed["market"]["offer_cap_usd_per_mwh"]
+        top = _js_const("PEAK_MAX_MW")
+        out = _post(
+            client, seed, bids={b: {"peak_mw": top} for b in seed["config"]["load"]["bids"]}
+        )
+        peak = out["hours"][max(range(24), key=lambda t: out["bid_mw"]["D_firm"][t])]
+        served = sum(out["served"][b][peak] for b in out["bids"])
+        asked = sum(out["bid_mw"][b][peak] for b in out["bids"])
+        assert served < asked  # shed
+        assert max(out["lmp"][i][peak] for i in out["buses"]) == pytest.approx(cap)
+
+
+class TestTheHourLeverNeedsNoSolve:
+    """The hour indexes the day the last solve returned. It does not post.
+
+    What that requires of the wire is that the day come back WHOLE and
+    ALIGNED: every hour the slider can reach must exist in every series the
+    page reads, or the slider prints undefined where a price belongs.
+    """
+
+    @pytest.fixture(scope="class")
+    def cleared(self, client, seed):
+        r = client.post(
+            "/clear", json={"config": seed["config"], "slack": seed["slack"], "limits": None}
+        )
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    def test_the_returned_day_is_as_long_as_the_shape_the_slider_spans(
+        self, cleared, seed
+    ):
+        # The slider's max is state.shape.length. One post must answer all of
+        # it; a shorter response is the silent failure this asserts away.
+        assert len(cleared["hours"]) == len(seed["config"]["load"]["shape"])
+
+    def test_every_series_the_hour_indexes_covers_every_hour(self, cleared):
+        n = len(cleared["hours"])
+        for field in ("lmp", "congestion", "flows", "mu", "dispatch", "served", "bid_mw"):
+            assert all(len(s) == n for s in cleared[field].values()), field
+        for ledger in cleared["settlement"].values():
+            assert all(len(s) == n for s in ledger.values())
+
+    def test_the_hours_differ_so_the_lever_has_something_to_show(self, cleared):
+        """A day of identical hours would make the hour slider look broken
+        and would also mean the shape never reached the LP."""
+        assert len({tuple(round(cleared["lmp"][b][t], 6) for b in cleared["buses"])
+                    for t in range(len(cleared["hours"]))}) > 1
+
+
+class TestTheSliderDomainsCanRepresentTheSeed:
+    """A domain is a market assumption, the same as a default.
+
+    Each slider clamps its start position into its range and snaps to its
+    step. So a seeded value outside a domain, or off its grid, would be
+    silently rewritten the first time a visitor touched that slider -- the
+    page would price a scenario the repo does not test, with nothing on
+    screen saying so. Fixed domains, asserted against the fixed seed.
+    """
+
+    def test_every_finite_line_rating_fits_under_the_ceiling(self, seed):
+        ceiling = _js_const("LIMIT_CEILING_MW")
+        step = _js_const("LIMIT_STEP_MW")
+        for name, spec in seed["config"]["network"]["branches"].items():
+            if spec["limit_mw"] == "inf":
+                continue  # the last notch, which is not a number
+            assert spec["limit_mw"] <= ceiling, name
+            assert spec["limit_mw"] % step == 0, name
+
+    def test_every_capacity_fits(self, seed):
+        top = _js_const("PMAX_MAX_MW")
+        step = _js_const("PMAX_STEP_MW")
+        for name, gen in seed["config"]["fleet"].items():
+            assert gen["pmax_mw"] <= top, name
+            assert gen["pmax_mw"] % step == 0, name
+
+    def test_every_offer_fits(self, seed):
+        top = _js_const("COST_MAX_USD")
+        step = _js_const("COST_STEP_USD")
+        for name, gen in seed["config"]["fleet"].items():
+            assert gen["cost_usd_per_mwh"] <= top, name
+            assert gen["cost_usd_per_mwh"] % step == 0, name
+
+    def test_every_bid_peak_fits(self, seed):
+        top = _js_const("PEAK_MAX_MW")
+        step = _js_const("PEAK_STEP_MW")
+        for name, bid in seed["config"]["load"]["bids"].items():
+            assert bid["peak_mw"] <= top, name
+            assert bid["peak_mw"] % step == 0, name
+
+    def test_the_unlimited_notch_sits_one_step_past_the_ceiling(self):
+        """It is a position, not a rating. One step past the end so no finite
+        rating can land on it and be read as infinite.
+
+        Asserted on the SOURCE rather than on a value, because the notch is
+        derived from the other two constants in controls.js and pinning it to
+        a number here would be a third place to keep in step.
+        """
+        source = CONTROLS_JS.read_text()
+        assert "const LIMIT_INF_POS = LIMIT_CEILING_MW + LIMIT_STEP_MW;" in source
+
+    def test_the_offer_slider_does_not_reach_the_cap(self, seed):
+        """Deliberate. A generator offering at the system-wide offer cap would
+        price every hour at scarcity, which is a scenario to write in a config
+        rather than one to reach by dragging past everything interesting."""
+        assert _js_const("COST_MAX_USD") < seed["market"]["offer_cap_usd_per_mwh"]
+
+
+class TestTheLeverModuleIsServed:
+    def test_controls_is_served_as_javascript(self, client):
+        r = client.get("/js/controls.js")
+        assert r.status_code == 200
+        assert "javascript" in r.headers["content-type"]

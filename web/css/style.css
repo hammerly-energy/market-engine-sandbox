@@ -267,3 +267,98 @@ th:last-child { padding-right: 0; }
   .panel { max-width: none; }
   th, td { padding-right: 0.5rem; }
 }
+
+/* -------------------------------------------------------- W2.4, the levers
+   Sliders in the publication register: sentence case, units in the readout
+   once, a recessive track, no bold anywhere. The rail is grid-coloured and
+   the thumb is ink, so a row reads as "a position on a scale" rather than as
+   a control competing with the figure above it. */
+
+.lever-group {
+  border: none;
+  border-top: 1px solid var(--grid);
+  margin: 0;
+  padding: 0.7rem 0 0.9rem;
+}
+
+.lever-group legend {
+  padding: 0;
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+}
+
+.lever-group .note { margin: 0.1rem 0 0.6rem; }
+
+.lever {
+  display: grid;
+  grid-template-columns: 17ch 1fr 7ch;
+  align-items: center;
+  gap: 0 0.9rem;
+  padding: 0.1rem 0;
+}
+
+.lever-name {
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lever-value {
+  font-size: var(--type-annot);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink);
+}
+
+.lever input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 1.1rem;
+  background: transparent;
+  cursor: pointer;
+  margin: 0;
+}
+
+.lever input[type="range"]::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--grid);
+  border-radius: 1px;
+}
+
+.lever input[type="range"]::-moz-range-track {
+  height: 2px;
+  background: var(--grid);
+  border-radius: 1px;
+}
+
+.lever input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-top: -0.29rem;
+  border-radius: 50%;
+  background: var(--ink-2);
+  border: 1px solid var(--surface);
+}
+
+.lever input[type="range"]::-moz-range-thumb {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--ink-2);
+  border: 1px solid var(--surface);
+}
+
+.lever input[type="range"]:focus-visible {
+  outline: 1px solid var(--ink-2);
+  outline-offset: 2px;
+}
+
+@media (max-width: 32rem) {
+  .lever { grid-template-columns: 1fr 6ch; }
+  .lever-name { grid-column: 1 / -1; }
+}
