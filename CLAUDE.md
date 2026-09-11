@@ -188,10 +188,37 @@ prose — the image carries the evidence.
 - **Annotations are terse.** `λ = 35`, `λ ∈ [20, 35]`. Not `λ = $35/MWh — the
   dual on energy balance`, not `no unique price`.
 - **Units appear once, on the axis label.** Never repeated on every mark.
-- **Capitalize every piece of display text.** Titles, panel labels, axis labels,
-  legend entries, annotations, and inset tables all begin with a capital letter.
-  Sentence case, not Title Case. Identifiers that come from the data (`g1`, bus
-  names, `λ`) keep their literal form.
+- **Titles and subtitles are Title Case. Everything else is sentence case.**
+  The split is by *role*, not by size: a title names the thing, and the extra
+  capitals are what make it read as a name rather than as the first sentence of
+  the caption. A label is read against an axis or a column and wants as little
+  ink as the meaning allows.
+
+  **Title Case** — figure panel titles, page and section headings, the HTML
+  `<title>`, control-group headings. The rules, and they are the ordinary
+  English ones:
+
+  - **Always capitalize the first and last word** of a title and of a
+    subtitle, whatever part of speech they are.
+  - **Capitalize major words:** nouns, pronouns, verbs including linking
+    verbs, adjectives, adverbs. And prepositions of four letters or more —
+    `Against`, `Across`, `From`, `With`.
+  - **Lowercase minor words:** articles (`a`, `an`, `the`), coordinating
+    conjunctions (`and`, `but`, `or`, `nor`), and short prepositions (`in`,
+    `on`, `at`, `to`, `by`, `of`).
+  - **Capitalize the first word after a colon, an em dash, or end
+    punctuation**, even if it is a minor word.
+
+  **Sentence case, with a capital first letter** — axis labels, legend
+  entries, annotations, table column headers, inset tables, captions, notes
+  and every other piece of display text. A column header is an axis label for
+  a table and follows the axis rule, not the title rule.
+
+  **Identifiers beat both.** Anything that comes from the data keeps its
+  literal form wherever it appears, first or last word included: `g1`, bus
+  names, `λ`, and the units, which keep their real capitalization (`MW`,
+  `MWh`, `$/MWh`) because case is meaning there. `Sensitivity of DE` is
+  correct and `Sensitivity of De` is not.
 - **No bold, restrained type scale.** Roughly 8.5–10.5 pt. Emphasis comes from
   position and whitespace, not weight. This holds for text sitting on a shaded
   fill too — fix its legibility with font *color*, never with weight.
@@ -325,8 +352,9 @@ The publication rules above still govern anything exported as a file. On
 screen, they hold with three amendments:
 
 - **Identifiers, capitalisation and units are unchanged.** `g1`, `λ`, `MW`,
-  `$/MWh`, sentence case, units on the axis label once. A web figure is not
-  licensed to be sloppier than a printed one.
+  `$/MWh`, Title Case for titles and sentence case for labels, units on the
+  axis label once. A web figure is not licensed to be sloppier than a printed
+  one.
 - **Hover may carry precision the figure does not.** A tooltip is allowed to
   give four decimals where the mark is rounded. It may not carry an argument
   or a sentence the figure needed to make itself.

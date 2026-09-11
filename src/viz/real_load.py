@@ -80,7 +80,7 @@ def _panel_system(ax, hours, system_mw, positions):
 
     ax.set_ylim(0, max(gw) * 1.30)
     ax.set_ylabel("ERCOT demand (GW)", fontsize=9.5, color=INK_2)
-    ax.set_title("(a)  Ingested system demand", fontsize=10.5, color=INK,
+    ax.set_title("(a)  Ingested System Demand", fontsize=10.5, color=INK,
                  loc="left", pad=10)
 
 
@@ -108,7 +108,7 @@ def _panel_dispatch(ax, c, Pmax, res, hours, positions):
 
     ax.set_ylim(0, sum(Pmax.values()))
     ax.set_ylabel("Dispatch (MW)", fontsize=9.5, color=INK_2)
-    ax.set_title("(b)  Dispatch by hour, in merit order", fontsize=10.5,
+    ax.set_title("(b)  Dispatch by Hour, in Merit Order", fontsize=10.5,
                  color=INK, loc="left", pad=10)
     ax.legend(
         handles=[Patch(facecolor=SERIES[i], alpha=ALPHA[i], label=g)
@@ -151,7 +151,7 @@ def _panel_reach(ax, c, Pmax, D, res, hours, positions):
     ax.set_xticks([0, 100, 200, 300])
     ax.set_xlabel("Hourly load (MW)", fontsize=9.5, color=INK_2)
     ax.set_ylabel(r"Clearing price $\lambda$ (\$/MWh)", fontsize=9.5, color=INK_2)
-    ax.set_title("(c)  Clearing price against hourly load", fontsize=10.5,
+    ax.set_title("(c)  Clearing Price Against Hourly Load", fontsize=10.5,
                  color=INK, loc="left", pad=10)
     ax.legend(
         handles=[

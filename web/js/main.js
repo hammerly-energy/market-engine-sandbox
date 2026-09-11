@@ -146,7 +146,7 @@ function refreshReadouts() {
   const text = JSON.stringify(bodyFor(editor), null, 2);
   document.querySelector("#body").textContent = text;
   document.querySelector("#body-summary").textContent =
-    `What is posted (${new TextEncoder().encode(text).length.toLocaleString()} bytes` +
+    `What Is Posted (${new TextEncoder().encode(text).length.toLocaleString()} bytes` +
     (caps ? ` of ${caps.max_body_bytes.toLocaleString()}` : "") +
     ")";
 }

@@ -190,7 +190,7 @@ export function mountLevers(root, state, { onEdit, onHour, hueFor }) {
      as its own argument, so moving a rating does not rewrite the scenario the
      rating belongs to, and dropping the override restores it exactly. */
   const lines = group(
-    "Line ratings",
+    "Line Ratings",
     "An override passed to the engine alongside the scenario, not an edit to " +
       "it. ∞ is an unrated line, which is what the scenario says — not a " +
       "rating large enough never to bind.",
@@ -265,7 +265,7 @@ export function mountLevers(root, state, { onEdit, onHour, hueFor }) {
      at the offer cap; dropping one below an LMP turns it into demand response,
      which is M9(a)'s figure and a config line, not a slider on this page. */
   const demand = group(
-    "Demand bids",
+    "Demand Bids",
     "Peak MW per named bid, scaled by the 24-hour shape. Every bid is firm — " +
       "valued at the offer cap — so it is served unless the network cannot " +
       "reach it.",

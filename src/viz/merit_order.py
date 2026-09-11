@@ -93,7 +93,7 @@ def _panel_stack(ax, c, Pmax, D, res):
     ax.set_ylim(0, ymax)
     ax.set_xlabel("Cumulative capacity (MW)", fontsize=9.5, color=INK_2)
     ax.set_ylabel(r"Offer price (\$/MWh)", fontsize=9.5, color=INK_2)
-    ax.set_title("(a)  Supply stack at D = 150 MW", fontsize=10.5, color=INK,
+    ax.set_title("(a)  Supply Stack at D = 150 MW", fontsize=10.5, color=INK,
                  loc="left", pad=10)
     ax.legend(
         handles=[
@@ -137,7 +137,7 @@ def _panel_price_curve(ax, c, Pmax, D, step=1.0):
     ax.set_ylim(0, ymax)
     ax.set_xlabel("Demand (MW)", fontsize=9.5, color=INK_2)
     ax.set_ylabel(r"Clearing price $\lambda$ (\$/MWh)", fontsize=9.5, color=INK_2)
-    ax.set_title("(b)  Clearing price against demand", fontsize=10.5, color=INK,
+    ax.set_title("(b)  Clearing Price Against Demand", fontsize=10.5, color=INK,
                  loc="left", pad=10)
 
 

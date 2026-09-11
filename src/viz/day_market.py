@@ -195,7 +195,7 @@ def _panel_load(ax, hours, load, congested):
     _bare(ax)
     _hours(ax, hours)
     ax.set_ylabel("System load (MW)", fontsize=9.5, color=INK_2)
-    _title(ax, "a", "System load across the day")
+    _title(ax, "a", "System Load Across the Day")
 
 
 def _panel_lmp(ax, hours, buses, lmp, congested):
@@ -221,7 +221,7 @@ def _panel_lmp(ax, hours, buses, lmp, congested):
     _bare(ax)
     _hours(ax, hours)
     ax.set_ylabel("LMP ($/MWh)", fontsize=9.5, color=INK_2)
-    _title(ax, "b", "Locational prices at each bus")
+    _title(ax, "b", "Locational Prices at Each Bus")
     leg = ax.legend(loc="lower left", frameon=False, fontsize=8.5, ncol=5,
                     handlelength=1.2, columnspacing=1.0, borderpad=0.2)
     for text in leg.get_texts():
@@ -276,7 +276,7 @@ def _panel_stack(ax, hours, fleet, dispatch, buses, congested):
     _hours(ax, hours)
     _shade_congested(ax, hours, congested, label_y=top * 0.985)
     ax.set_ylabel("Dispatch (MW)", fontsize=9.5, color=INK_2)
-    _title(ax, "a", "Dispatch by unit, stacked in merit order")
+    _title(ax, "a", "Dispatch by Unit, Stacked in Merit Order")
 
     # Every unit in the fleet, in merit order, including any that never runs.
     # Sundance at $40 is never reached on this day, and a legend entry with no
@@ -306,7 +306,7 @@ def _panel_corridor(ax, hours, flow, limit, congested, line="DE"):
     _bare(ax)
     _hours(ax, hours)
     ax.set_ylabel(f"{line} flow (MW)", fontsize=9.5, color=INK_2)
-    _title(ax, "b", f"The {line} corridor against its limit")
+    _title(ax, "b", f"The {line} Corridor Against Its Limit")
 
 
 def figure_day_dispatch(hours, buses, fleet, dispatch, flow, limit, congested):
@@ -323,7 +323,7 @@ def figure_day_dispatch(hours, buses, fleet, dispatch, flow, limit, congested):
 def _panel_money(ax, hours, settlement, congested):
     pay = [settlement[t]["payments"] for t in hours]
     rev = [settlement[t]["revenue"] for t in hours]
-    rent = [settlement[t]["mu_times_limit"] for t in hours]
+    rent = [settlement[t]["rent_from_duals"] for t in hours]
 
     top = max(pay) * 1.2
     ax.set_ylim(0, top)
@@ -340,7 +340,7 @@ def _panel_money(ax, hours, settlement, congested):
     _bare(ax)
     _hours(ax, hours)
     ax.set_ylabel("Money ($/h)", fontsize=9.5, color=INK_2)
-    _title(ax, "a", "Payments, revenue and congestion rent")
+    _title(ax, "a", "Payments, Revenue and Congestion Rent")
     leg = ax.legend(loc="upper left", frameon=False, fontsize=8.5,
                     handlelength=1.4, borderpad=0.2)
     for text in leg.get_texts():
@@ -388,7 +388,7 @@ def _panel_residual(ax, hours, settlement, congested, tol=1e-6):
     _bare(ax)
     _hours(ax, hours)
     ax.set_ylabel("|Residual| ($/h)", fontsize=9.5, color=INK_2)
-    _title(ax, "b", "Settlement identity residual, by hour")
+    _title(ax, "b", "Settlement Identity Residual, by Hour")
 
 
 def figure_day_settlement(hours, settlement, congested):
@@ -468,10 +468,10 @@ def figure_context(buses, branches, slack, fleet, peak_load, trough_mw, peak_mw)
 
     capacity = {b: sum(g["pmax"] for g in fleet if g["bus"] == b) for b in buses}
     _panel_network(axes[0], buses, branches, slack, capacity, peak_load)
-    _title(axes[0], "a", "Network, capacity and peak load (MW)")
+    _title(axes[0], "a", "Network, Capacity and Peak Load (MW)")
 
     _panel_offer_band(axes[1], buses, fleet, trough_mw, peak_mw)
-    _title(axes[1], "b", "Offer stack and the day's load range")
+    _title(axes[1], "b", "Offer Stack and the Day's Load Range")
     return fig
 
 
@@ -502,6 +502,21 @@ if __name__ == "__main__":
     load = {t: sum(D[b][t] for b in buses) for t in hours}
     congested = {t for t in hours if binding_lines(day, t)}
 
+    # W1 re-keyed lambda and settlement by (island, hour), because a cut
+    # network is priced component by component -- one energy balance row, one
+    # lambda and one settlement identity per island. This script was written
+    # at M4, when there was one of each and the key was the hour alone.
+    #
+    # m4.yaml's network is connected, so there is exactly one island and it is
+    # named by the slack. That is ASSERTED rather than assumed: the day these
+    # figures are drawn from a cut network, the assertion is what says so,
+    # instead of the panels quietly showing one island's numbers as though
+    # they were the system's.
+    assert len(day["islands"]) == 1, "these figures assume a connected network"
+    island = day["slack"]
+    lmbda = {t: day["lmbda"][island, t] for t in hours}
+    settlement = {t: day["settlement"][island, t] for t in hours}
+
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out = root / "runs" / stamp
     out.mkdir(parents=True, exist_ok=True)
@@ -521,17 +536,17 @@ if __name__ == "__main__":
     for t in hours:
         bind = ",".join(sorted(binding_lines(day, t))) or "--"
         rows.append(
-            f"  {t:>4}  {load[t]:8,.0f}   {bind:>7}  {day['lmbda'][t]:7.2f}  "
+            f"  {t:>4}  {load[t]:8,.0f}   {bind:>7}  {lmbda[t]:7.2f}  "
             + "  ".join(f"{day['lmp'][b, t]:7.2f}" for b in buses)
-            + f"   {day['settlement'][t]['residual']:10.2e}"
+            + f"   {settlement[t]['residual']:10.2e}"
         )
 
-    worst = max(hours, key=lambda t: abs(day["settlement"][t]["residual"]))
+    worst = max(hours, key=lambda t: abs(settlement[t]["residual"]))
     rows += [
         "",
         "  Settlement identity",
         f"    Worst hour             {worst}",
-        f"    Worst |residual|       {abs(day['settlement'][worst]['residual']):.2e} $/h",
+        f"    Worst |residual|       {abs(settlement[worst]['residual']):.2e} $/h",
         f"    Tolerance asserted     1.00e-06 $/h",
         "",
         f"  Day production cost      {day['cost']:,.2f} $",
@@ -560,7 +575,7 @@ if __name__ == "__main__":
         ("m4_2_dispatch", figure_day_dispatch(
             hours, buses, fleet, day["dispatch"], day["flows"],
             day["limits"]["DE"], congested)),
-        ("m4_3_settlement", figure_day_settlement(hours, day["settlement"], congested)),
+        ("m4_3_settlement", figure_day_settlement(hours, settlement, congested)),
     ]:
         for ext in ("png", "pdf"):
             fig.savefig(out / f"{name}.{ext}", dpi=300, facecolor=SURFACE)

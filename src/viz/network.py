@@ -228,7 +228,7 @@ def figure_inputs(buses, branches, slack, fleet, load):
 
     capacity = {b: sum(g["pmax"] for g in fleet if g["bus"] == b) for b in buses}
     _panel_network(axes[0], buses, branches, slack, capacity, load)
-    _title(axes[0], "a", "Network, capacity and load (MW)")
+    _title(axes[0], "a", "Network, Capacity and Load (MW)")
 
     _panel_offer_stack(axes[1], buses, fleet, sum(load.values()))
     _title(axes[1], "b", "Generators")
@@ -247,7 +247,7 @@ def figure_processing(buses, branches):
     names = [b.name for b in branches]
 
     _matrix(axes[0], incidence(buses, branches), names, buses, "{:+.0f}")
-    _title(axes[0], "a", "Branch-bus incidence A")
+    _title(axes[0], "a", "Branch-Bus Incidence A")
     axes[0].set_xlabel("Bus", fontsize=9.5, color=INK_2)
     axes[0].set_ylabel("Branch", fontsize=9.5, color=INK_2)
 
@@ -256,7 +256,7 @@ def figure_processing(buses, branches):
     # not. This is B_bus = A.T @ diag(b) @ A, whose off-diagonals are NEGATIVE
     # by construction -- and a reader who thinks they are looking at b sees six
     # positive reactances turn into negative numbers for no reason.
-    _title(axes[1], "b", "Bus susceptance B_bus (p.u.)")
+    _title(axes[1], "b", "Bus Susceptance B_bus (p.u.)")
     axes[1].set_xlabel("Bus", fontsize=9.5, color=INK_2)
     axes[1].set_ylabel("Bus", fontsize=9.5, color=INK_2)
     return fig
@@ -295,7 +295,7 @@ def figure_results(buses, branches, slack, line="DE"):
     names = [b.name for b in branches]
 
     _matrix(axes[0], P, names, buses, "{:+.2f}", vlim=1.0)
-    _title(axes[0], "a", f"Shift factors, slack {slack} (MW/MW)")
+    _title(axes[0], "a", f"Shift Factors, Slack {slack} (MW/MW)")
     axes[0].set_xlabel("Bus injecting", fontsize=9.5, color=INK_2)
     axes[0].set_ylabel("Branch", fontsize=9.5, color=INK_2)
 
@@ -445,10 +445,10 @@ def figure_flows(buses, branches, slack, injection, cleared_flows):
     cleared = np.array([cleared_flows[b.name] for b in branches])
 
     _panel_flow_network(axes[0], buses, branches, slack, injection, flows)
-    _title(axes[0], "a", "Merit order, ignoring the network (MW)")
+    _title(axes[0], "a", "Merit Order, Ignoring the Network (MW)")
 
     _panel_loading(axes[1], branches, flows, cleared)
-    _title(axes[1], "b", "Flow against rating")
+    _title(axes[1], "b", "Flow Against Rating")
     return fig
 
 
@@ -506,10 +506,10 @@ def figure_cleared(buses, branches, slack, injection, flows, binding,
     mw = np.array([flows[b.name] for b in branches])
     _panel_flow_network(axes[0], buses, branches, slack, injection, mw,
                         flagged=binding)
-    _title(axes[0], "a", "Cleared flows and net injection (MW)")
+    _title(axes[0], "a", "Cleared Flows and Net Injection (MW)")
 
     _panel_redispatch(axes[1], fleet, merit, cleared, buses)
-    _title(axes[1], "b", "Redispatch from merit order")
+    _title(axes[1], "b", "Redispatch From Merit Order")
     return fig
 
 
@@ -585,10 +585,10 @@ def figure_settlement(buses, fleet, dispatch, lmp):
 
     offers = [g["cost"] for g in fleet]
     _panel_lmp(axes[0], buses, lmp, (min(offers), max(offers)))
-    _title(axes[0], "a", "Price by bus")
+    _title(axes[0], "a", "Price by Bus")
 
     _panel_revenue(axes[1], buses, fleet, dispatch, lmp)
-    _title(axes[1], "b", "Generator revenue")
+    _title(axes[1], "b", "Generator Revenue")
     return fig
 
 
