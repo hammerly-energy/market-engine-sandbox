@@ -16,13 +16,29 @@
 
   <section class="panel figure">
     <h2>Network</h2>
-    <svg id="network" role="img"
-         aria-label="The five-bus network: buses and the branches between them"></svg>
+    <div class="toolbar" id="toolbar" role="group"
+         aria-label="Editing modes"></div>
+    <div class="armed-row">
+      <p class="armed" id="armed" role="status" aria-live="polite"></p>
+      <span id="undo-slot"></span>
+    </div>
+    <svg id="network" tabindex="0" role="application"
+         aria-label="The network: buses, the branches between them, and the
+                     generators at each bus. Tab to a mark and press Enter to
+                     apply the armed mode."></svg>
     <p class="caption" id="network-caption">
-      Buses and branches as the editor declares them. Colour is identity, not
-      price — it matches the figures in <code>src/viz/</code>. The ringed bus
-      is the slack, which is an accounting origin: no LMP, dispatch, flow or
-      settlement figure depends on which bus it is.
+      Buses, branches and generators as the editor declares them. Colour is
+      identity, not price — it matches the figures in <code>src/viz/</code>.
+      The ringed bus is the slack, which is an accounting origin: no LMP,
+      dispatch, flow or settlement figure depends on which bus it is. A square
+      is a generator; its bus, capacity and offer are on hover and on focus,
+      because five more names would collide at this scale.
+    </p>
+    <p class="caption">
+      Drag a bus to move it — coordinates are editor state and never cross the
+      wire. Every other edit is armed first: press a button above, then click
+      the target. Esc disarms. Nothing asks for confirmation, because undo is
+      what makes removing something safe to try.
     </p>
   </section>
 

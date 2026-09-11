@@ -20,13 +20,29 @@
  *          |
  *        paint() reads `cleared`, never the server
  *
+ * W2.5 ADDS A THIRD KIND OF CHANGE and this module is where the three are
+ * told apart, because that is the only place they can be:
+ *
+ *     structural  add/remove a bus, a line, a generator. The shape of the
+ *                 scenario moved, so the LEVERS are rebuilt too -- a removed
+ *                 generator whose sliders stayed would write into an object
+ *                 nothing renders. Undo point, redraw, re-solve.
+ *     a lever     a number moved. Redraw, re-solve, levers left alone (they
+ *                 are being dragged).
+ *     a drag      a COORDINATE moved. Redraw and nothing else: coordinates are
+ *                 editor state, never cross the wire, and no price depends on
+ *                 them, so a solve here would be a round trip for an answer
+ *                 the browser already has.
+ *
  * No number below is computed. Everything shown is a field of the clear()
  * return, counted or formatted -- the boundary rule.
  */
 
 import { bodyFor, createSolver, getLimits } from "./api.js";
 import { mountLevers } from "./controls.js";
+import { createHistory } from "./edits.js";
 import { describe, summarize } from "./errors.js";
+import { mountGrammar } from "./grammar.js";
 import { checkBounds, fetchSeed, stateFromSeed } from "./state.js";
 import {
   hueFor,
@@ -190,8 +206,12 @@ async function submit() {
  * A scenario lever redraws the map immediately and posts; the map must not
  * wait a round trip or the editor lags the hand. A view lever paints. That is
  * the entire difference between the two handlers. */
-function onEdit() {
+function draw() {
   renderNetwork(document.querySelector("#network"), editor);
+}
+
+function onEdit() {
+  draw();
   refreshReadouts();
   submit();
 }
@@ -200,15 +220,71 @@ function onHour() {
   paint();
 }
 
+/* ------------------------------------------------------- the three changes
+ *
+ * A structural edit rebuilds the levers; a lever move does not. That is the
+ * whole difference between these two, and getting it backwards is either a
+ * slider that jumps out from under a dragging thumb or a slider left pointing
+ * at a generator that no longer exists.
+ */
+
+const history = createHistory(editor);
+
+function rebuild() {
+  draw();
+  mountLevers(document.querySelector("#levers"), editor, {
+    onEdit,
+    onHour,
+    hueFor,
+  });
+  refreshReadouts();
+}
+
+function structural(label, mutate) {
+  history.mark(label);
+  mutate(editor);
+  rebuild();
+  submit();
+}
+
+/* A coordinate change. NO SOLVE: bus x/y is editor state and never crosses
+   the wire, so there is no question here for the engine to answer. Redraw
+   only, and it has to be immediate -- a map that waited on anything would lag
+   the hand and the editor would feel broken. */
+function moved(mutate) {
+  mutate(editor);
+  draw();
+}
+
+function undo() {
+  const label = history.undo();
+  if (label) {
+    rebuild();
+    submit();
+  }
+  return label;
+}
+
 try {
   caps = await getLimits();
 } catch (err) {
   say(summarize(err), "error");
 }
 
-renderNetwork(document.querySelector("#network"), editor);
-mountLevers(document.querySelector("#levers"), editor, { onEdit, onHour, hueFor });
-refreshReadouts();
+rebuild();
+
+mountGrammar({
+  svg: document.querySelector("#network"),
+  toolbar: document.querySelector("#toolbar"),
+  undoSlot: document.querySelector("#undo-slot"),
+  readout: document.querySelector("#armed"),
+  state: editor,
+  edit: structural,
+  move: moved,
+  mark: (label) => history.mark(label),
+  drop: () => history.drop(),
+  undo,
+});
 
 document.querySelector("#solve").addEventListener("click", () => submit());
 

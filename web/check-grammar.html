@@ -1,0 +1,180 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>grammar check</title>
+<style>
+ body{font:13px ui-monospace,Menlo,monospace;margin:12px;background:#fcfcfb}
+ li{margin:2px 0}
+ .ok{color:#0a7a3f} .bad{color:#a8380f}
+ iframe{width:900px;height:300px;border:1px solid #ddd}
+</style>
+<!-- W2.5's test harness, and the only kind this repo can have for the
+     editing grammar: there is no JavaScript runtime in this environment and
+     adding one would be a build step, which web/ exists without. So the
+     grammar is driven in a real browser instead -- this page iframes the app
+     at same origin, dispatches synthetic pointer and key events on the real
+     marks, and reads the result back out of the page's own "what is posted"
+     panel, which is the editor's state as the wire would carry it.
+
+     Run it: serve the app, open /check-grammar.html, and look. Or headless:
+
+       .venv/bin/uvicorn src.api.app:app --port 8000
+       chrome --headless=new --screenshot=out.png --window-size=1000,800 \
+              --virtual-time-budget=12000 http://127.0.0.1:8000/check-grammar.html
+
+     It is a development page and is not linked from the app. Drop it from
+     the W4 deploy. -->
+<ul id="out"></ul>
+<iframe id="f" src="/"></iframe>
+<script type="module">
+const out = document.querySelector("#out");
+const results = [];
+function check(name, cond, extra="") {
+  results.push(cond);
+  const li = document.createElement("li");
+  li.className = cond ? "ok" : "bad";
+  li.textContent = `${cond ? "PASS" : "FAIL"}  ${name}${extra ? " — " + extra : ""}`;
+  out.append(li);
+}
+const f = document.querySelector("#f");
+await new Promise(r => f.addEventListener("load", r));
+const doc = f.contentDocument;
+const win = f.contentWindow;
+await new Promise(r => setTimeout(r, 1200));
+
+const cfg = () => JSON.parse(doc.querySelector("#body").textContent).config;
+const armed = () => doc.querySelector("#armed").textContent.trim();
+const svg = doc.querySelector("#network");
+const press = (label) => [...doc.querySelectorAll("#toolbar button")]
+  .find(b => b.textContent.trim() === label).click();
+function center(el) {
+  const r = el.getBoundingClientRect();
+  return { clientX: r.left + r.width/2, clientY: r.top + r.height/2 };
+}
+function clickMark(el) {
+  const at = center(el);
+  const opts = { bubbles: true, cancelable: true, pointerId: 1, button: 0, ...at };
+  el.dispatchEvent(new win.PointerEvent("pointerdown", opts));
+  el.dispatchEvent(new win.PointerEvent("pointerup", opts));
+}
+const bus = (n) => svg.querySelector(`[data-bus="${n}"]`);
+const branch = (n) => svg.querySelector(`[data-branch="${n}"]`);
+const wait = () => new Promise(r => setTimeout(r, 120));
+
+// --- baseline
+check("the seed draws five buses", svg.querySelectorAll("[data-bus]").length === 5);
+check("the seed draws five generators", svg.querySelectorAll("[data-gen]").length === 5);
+check("idle on load", armed().startsWith("Move mode."));
+
+// --- add a generator
+press("+ Generator");
+check("arming shows the mode", armed().startsWith("Add generator armed."), armed());
+clickMark(bus("B")); await wait();
+check("a generator landed at B", cfg().fleet.g1?.bus === "B", JSON.stringify(cfg().fleet.g1));
+check("defaults are the written ones",
+  cfg().fleet.g1?.pmax_mw === 100 && cfg().fleet.g1?.cost_usd_per_mwh === 25);
+check("an applied edit returns to idle", armed().startsWith("Move mode."), armed());
+check("and says what it did", armed().includes("Added g1 at B"), armed());
+check("the map drew the new unit", svg.querySelectorAll("[data-gen]").length === 6);
+
+// --- connect
+press("+ Line");
+clickMark(bus("A")); await wait();
+check("the first click is pending, not an edit", armed().includes("Add line armed, from A"), armed());
+check("no branch yet", Object.keys(cfg().network.branches).length === 6);
+check("the pending bus is marked", bus("A").dataset.pending === "true");
+clickMark(bus("C")); await wait();
+check("the second click connects", "AC" in cfg().network.branches, Object.keys(cfg().network.branches).join(","));
+check("the new line is unrated", cfg().network.branches.AC?.limit_mw === "inf");
+check("and gets the default reactance", cfg().network.branches.AC?.reactance_pu === 0.03);
+
+// --- a self-loop is refused
+press("+ Line");
+clickMark(bus("A")); await wait();
+clickMark(bus("A")); await wait();
+check("a self-loop is refused with a sentence", armed().includes("cannot connect to itself"), armed());
+check("and adds nothing", Object.keys(cfg().network.branches).length === 7);
+press("+ Line"); // toggle the armed mode back off, rather than undoing
+
+// --- cut a line
+press("Remove Item");
+clickMark(branch("DE")); await wait();
+check("a cut line is gone", !("DE" in cfg().network.branches));
+check("and the readout says islands are priced", armed().includes("island"), armed());
+
+// --- remove a bus, transitively
+press("Remove Item");
+clickMark(bus("E")); await wait();
+const after = cfg();
+check("the bus is gone", !after.network.buses.includes("E"));
+check("its generator went with it", !("brighton" in after.fleet));
+check("its branches went with it",
+  !Object.values(after.network.branches).some(b => b.from === "E" || b.to === "E"));
+
+// --- remove the slack bus: the dropdown moves, it does not 422
+check("the slack is D before", cfg().network.slack === "D");
+press("Remove Item");
+clickMark(bus("D")); await wait();
+check("removing the slack moves it, it does not 422",
+  cfg().network.slack === cfg().network.buses[0], cfg().network.slack);
+check("and the page says where it went", armed().includes("slack moved to"), armed());
+check("no error on screen", !doc.querySelector("#status").dataset.state, doc.querySelector("#status").textContent);
+
+// --- undo walks back
+const before = JSON.stringify(cfg());
+doc.querySelector("#undo-slot button").click(); await wait();
+check("undo puts the slack bus back", JSON.stringify(cfg()) !== before);
+check("undo says what it undid", armed().includes("Undone: remove bus D"), armed());
+for (let i = 0; i < 12; i++) { doc.querySelector("#undo-slot button").click(); }
+await wait();
+check("undo walks back to the seed",
+  cfg().network.buses.join("") === "ABCDE" && Object.keys(cfg().fleet).length === 5
+  && Object.keys(cfg().network.branches).length === 6,
+  JSON.stringify(cfg().network.buses) + " " + Object.keys(cfg().network.branches).join(","));
+check("and then says there is nothing left", armed().includes("Nothing to undo"), armed());
+
+// --- Esc disarms
+press("Remove Item");
+svg.dispatchEvent(new win.KeyboardEvent("keydown", {key:"Escape", bubbles:true}));
+check("Esc disarms", armed().startsWith("Move mode."), armed());
+
+// --- the keyboard path
+press("+ Bus");
+svg.dispatchEvent(new win.KeyboardEvent("keydown", {key:"Enter", bubbles:true}));
+await wait();
+check("Enter on the figure places a bus", cfg().network.buses.includes("F"), cfg().network.buses.join(","));
+press("+ Generator");
+bus("F").dispatchEvent(new win.KeyboardEvent("keydown", {key:"Enter", bubbles:true}));
+await wait();
+check("Enter on a focused bus applies the armed mode",
+  Object.values(cfg().fleet).some(g => g.bus === "F"), JSON.stringify(cfg().fleet));
+
+// --- a mode acting on the wrong mark says so
+press("+ Generator");
+clickMark(branch("AB")); await wait();
+check("a mode that cannot act on a mark says so", armed().includes("Nothing to do"), armed());
+
+// --- drag moves a bus and does NOT post.
+// Disarmed first, deliberately: the previous case leaves a mode armed (a
+// mark it cannot act on is not a reason to disarm), and drag only moves a
+// bus in idle. That is the grammar, not an accident.
+press("Move Bus");
+check("idle again before the drag", armed().startsWith("Move mode."), armed());
+const posted = doc.querySelectorAll("#log li").length;
+const b = bus("B");
+const at = center(b);
+const opts = (dx) => ({bubbles:true, cancelable:true, pointerId:1, button:0,
+  clientX: at.clientX + dx, clientY: at.clientY + dx});
+b.dispatchEvent(new win.PointerEvent("pointerdown", opts(0)));
+svg.dispatchEvent(new win.PointerEvent("pointermove", opts(40)));
+svg.dispatchEvent(new win.PointerEvent("pointerup", opts(40)));
+await wait();
+check("a drag says it moved the bus", armed().includes("Moved bus B"), armed());
+check("a drag posts nothing", doc.querySelectorAll("#log li").length === posted,
+  `${posted} -> ${doc.querySelectorAll("#log li").length}`);
+
+const bad = results.filter(r => !r).length;
+const head = document.createElement("li");
+head.className = bad ? "bad" : "ok";
+head.textContent = `${results.length - bad}/${results.length} passed`;
+out.prepend(head);
+</script>

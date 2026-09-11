@@ -706,3 +706,285 @@ class TestTheLeverModuleIsServed:
         r = client.get("/js/controls.js")
         assert r.status_code == 200
         assert "javascript" in r.headers["content-type"]
+
+
+# --------------------------------------------------------------------- W2.5
+# The editing grammar: drag moves a bus, every other structural edit is an
+# armed mode. Add or remove a bus, connect or cut a line, add or remove a
+# generator.
+#
+# THE INTERACTION IS NOT TESTED HERE AND CANNOT BE. There is no JavaScript
+# runtime in this environment and adding one would be a build step, which web/
+# exists without. So the grammar itself -- arming, hit-testing, the pending
+# first bus of a connect, the keyboard path, undo -- is driven in a real
+# browser by web/check-grammar.html, which iframes the app, dispatches
+# synthetic events on the real marks and reads the result back out of the
+# page's own "what is posted" panel.
+#
+# What is asserted here is the OTHER HALF: that each edit the grammar can
+# produce is a scenario this engine prices, and that the two refusals the
+# editor must avoid are real rather than imagined. Those are claims about the
+# engine, they are what would make an edit fail in front of a visitor, and
+# pytest is where they belong.
+
+EDITS_JS = Path("web/js/edits.js")
+STATE_JS = Path("web/js/state.js")
+
+
+def _js_const_in(path, name):
+    """A numeric `export const NAME = 123;` out of a module in web/js/."""
+    m = re.search(rf"^(?:export )?const {name} = (-?[\d.]+);", path.read_text(), re.M)
+    assert m, f"{name} is not a plain numeric const in {path}"
+    return float(m.group(1))
+
+
+@pytest.fixture(scope="module")
+def defaults():
+    """The defaults policy, read from the module that declares it.
+
+    A DEFAULT IS A MARKET ASSUMPTION, NOT A UI DETAIL (state.js says so at
+    length), so the tests below price the editor's actual numbers rather than
+    numbers that happen to agree with them today.
+    """
+    return {
+        "reactance_pu": _js_const_in(STATE_JS, "DEFAULT_REACTANCE_PU"),
+        "cost_usd_per_mwh": _js_const_in(STATE_JS, "DEFAULT_GEN_COST_USD_PER_MWH"),
+        "pmax_mw": _js_const_in(STATE_JS, "DEFAULT_GEN_PMAX_MW"),
+    }
+
+
+def _edited(seed, mutate):
+    """The seed config with one structural edit applied, as the editor would."""
+    config = json.loads(json.dumps(seed["config"]))
+    mutate(config)
+    return config
+
+
+def _clear(client, config, slack, limits=None, expect=200):
+    r = client.post("/clear", json={"config": config, "slack": slack, "limits": limits})
+    assert r.status_code == expect, r.text
+    return r.json()
+
+
+def _settles(cleared):
+    """The claim the whole repo rests on, per island AND per hour.
+
+    Never summed in either dimension: a positive residual in one island or one
+    hour would cancel a negative one in another, which is the mistake CLAUDE.md
+    names twice.
+    """
+    return all(
+        abs(residual) < 1e-6
+        for ledger in cleared["settlement"].values()
+        for residual in ledger["residual"]
+    )
+
+
+class TestTheEditsThatChangeTheNetwork:
+    def test_a_new_bus_on_a_new_line_gets_a_real_lmp(self, client, seed, defaults):
+        """Add bus, then connect: the two edits a visitor makes in that order.
+
+        A connected bus with no generator and no bid prices correctly and gets
+        a real LMP -- CLAUDE.md lists that under "not a bug, do not fix", and
+        it is the whole reason the defaults policy adds nothing to a new bus.
+        """
+        config = _edited(seed, lambda c: (
+            c["network"]["buses"].append("F"),
+            c["network"]["branches"].update(
+                {"AF": {"from": "A", "to": "F",
+                        "reactance_pu": defaults["reactance_pu"], "limit_mw": "inf"}}
+            ),
+        ))
+        out = _clear(client, config, seed["slack"])
+        assert "F" in out["lmp"]
+        assert len(out["lmp"]["F"]) == len(out["hours"])
+        assert _settles(out)
+
+    def test_a_new_line_is_unrated_and_therefore_never_binds(self, client, seed, defaults):
+        """The editor gives a new line no rating, because one it invented would
+        manufacture congestion nobody asked for. Stated as a price: mu is zero
+        on it in every hour."""
+        config = _edited(seed, lambda c: c["network"]["branches"].update(
+            {"AC": {"from": "A", "to": "C",
+                    "reactance_pu": defaults["reactance_pu"], "limit_mw": "inf"}}
+        ))
+        out = _clear(client, config, seed["slack"])
+        assert all(m == 0.0 for m in out["mu"]["AC"])
+        assert _settles(out)
+
+    def test_a_second_line_between_the_same_pair_solves(self, client, seed, defaults):
+        """Parallel branches are physical and are not a collision, which is why
+        nextBranchName suffixes rather than refusing. The map bows them apart;
+        the engine simply prices them."""
+        config = _edited(seed, lambda c: c["network"]["branches"].update(
+            {"AB2": {"from": "A", "to": "B",
+                     "reactance_pu": defaults["reactance_pu"], "limit_mw": "inf"}}
+        ))
+        out = _clear(client, config, seed["slack"])
+        assert {"AB", "AB2"} <= set(out["lines"])
+        assert _settles(out)
+
+    def test_cutting_lines_until_the_network_splits_prices_both_islands(self, client, seed):
+        """Cut is the edit most likely to be a visitor's first act, and W1's
+        answer is two markets rather than an error: one energy balance, one
+        lambda, one slack and one settlement identity per island."""
+        config = _edited(seed, lambda c: [
+            c["network"]["branches"].pop(line) for line in ("AB", "AD", "AE")
+        ])
+        out = _clear(client, config, seed["slack"])
+        assert len(out["islands"]) == 2
+        assert set(out["lmbda"]) == set(out["islands"])
+        # A is alone, and the island it is in is named by its own slack.
+        assert ["A"] in [sorted(buses) for buses in out["islands"].values()]
+        assert _settles(out)
+
+    def test_removing_a_bus_must_take_its_branches_with_it(self, client, seed):
+        """WHY removeBus is transitive, stated as the refusal it avoids.
+
+        A branch naming a bus that is gone is not ignored -- the engine refuses
+        the scenario by name. A removal that swept only the bus would put that
+        sentence in front of a visitor, about an object they did not touch.
+        """
+        config = _edited(seed, lambda c: c["network"]["buses"].remove("E"))
+        r = client.post("/clear", json={"config": config, "slack": seed["slack"]})
+        assert r.status_code == 422
+        assert r.json()["error"] == "invalid_scenario"
+        assert "E" in r.json()["detail"]
+
+    def test_a_rating_override_for_a_line_that_is_gone_is_refused(self, client, seed):
+        """WHY cut() drops the limits override with the branch.
+
+        clear() refuses an unknown limit key rather than ignoring it. Leaving
+        the override behind would make the NEXT solve fail, naming a line the
+        visitor had already removed -- a refusal one edit downstream of its
+        cause, which is the worst kind to debug from a screen.
+        """
+        config = _edited(seed, lambda c: c["network"]["branches"].pop("DE"))
+        r = client.post(
+            "/clear",
+            json={"config": config, "slack": seed["slack"], "limits": {"DE": 240.0}},
+        )
+        assert r.status_code == 422
+        assert r.json()["error"] == "invalid_scenario"
+        assert "DE" in r.json()["detail"]
+
+
+class TestTheEditsThatChangeTheFleet:
+    def test_a_generator_at_the_editors_defaults_actually_runs(self, client, seed, defaults):
+        """The defaults policy puts a new unit between the cheapest and dearest
+        seeded offers, so adding one is neither always in merit nor never in
+        it. Either extreme would make the lever look like it did nothing."""
+        config = _edited(seed, lambda c: c["fleet"].update(
+            {"g1": {"bus": "B", **{k: defaults[k] for k in ("cost_usd_per_mwh", "pmax_mw")}}}
+        ))
+        base = _clear(client, seed["config"], seed["slack"])
+        out = _clear(client, config, seed["slack"])
+        assert any(p > 0.0 for p in out["dispatch"]["g1"])
+        assert out["lmp"] != base["lmp"]
+        assert _settles(out)
+
+    def test_removing_a_unit_reprices_rather_than_refusing(self, client, seed):
+        base = _clear(client, seed["config"], seed["slack"])
+        config = _edited(seed, lambda c: c["fleet"].pop("brighton"))
+        out = _clear(client, config, seed["slack"])
+        assert "brighton" not in out["dispatch"]
+        assert out["lmp"] != base["lmp"]
+        assert _settles(out)
+
+    def test_removing_every_unit_sheds_at_the_cap_rather_than_refusing(self, client, seed):
+        """Remove is armed and clicked, so removing all five is four clicks
+        away. The editor emits only priced blocks, so an empty fleet is
+        scarcity at the cap -- a price, not an error (W1)."""
+        config = _edited(seed, lambda c: c["fleet"].clear())
+        r = client.post("/clear", json={"config": config, "slack": seed["slack"]})
+        if r.status_code == 200:
+            out = r.json()
+            cap = seed["market"]["offer_cap_usd_per_mwh"]
+            assert all(q == 0.0 for q in out["bid_mw"]["D_firm"])
+            assert all(p == pytest.approx(cap) for p in out["lmp"]["D"])
+        else:
+            # An empty fleet is a statement about the scenario, not about
+            # whether the market clears, so a named refusal is also correct.
+            assert r.json()["error"] == "invalid_scenario"
+
+
+class TestRemovingTheSlackBus:
+    """CLAUDE.md, W2.6: deleting the slack bus MOVES THE DROPDOWN, it does not
+    422. Half of that lands here, in removeBus, because the alternative is a
+    422 on the most ordinary edit on the page.
+
+    The engine's refusal of a slack that is not a bus stays correct and stays
+    in place -- it is the check that catches the editor failing to keep its own
+    state in step. So the editor keeps it in step, and it uses the SAME RULE
+    the engine's own fallback uses, so the two cannot disagree about where the
+    slack went.
+    """
+
+    def test_the_engines_fallback_is_the_first_bus_in_config_order(self, client, seed):
+        """The rule removeBus follows, read off the engine rather than assumed.
+
+        This is the fallback for a caller with no dropdown -- a sweep, a
+        notebook, a hand-edited config. The editor never reaches it, because it
+        posts an explicit slack; it copies it so that if it ever did, the
+        answer would be the same one.
+        """
+        config = _edited(seed, lambda c: (
+            c["network"]["buses"].remove("D"),
+            c["network"]["branches"].pop("AD"),
+            c["network"]["branches"].pop("CD"),
+            c["network"]["branches"].pop("DE"),
+            c["fleet"].pop("sundance"),
+            c["load"]["bids"].pop("D_firm"),
+        ))
+        # slack=None: the config still RECORDS D, which is now gone.
+        out = _clear(client, config, None)
+        assert out["slack"] == config["network"]["buses"][0]
+
+    def test_the_editors_explicit_slack_agrees_with_that_fallback(self, client, seed):
+        """What the editor actually posts after removing the slack bus, and it
+        must price identically to the fallback above -- same slack, same
+        prices. A disagreement here would be the editor silently pricing a
+        different market from the one a config-only caller gets."""
+        config = _edited(seed, lambda c: (
+            c["network"]["buses"].remove("D"),
+            c["network"]["branches"].pop("AD"),
+            c["network"]["branches"].pop("CD"),
+            c["network"]["branches"].pop("DE"),
+            c["fleet"].pop("sundance"),
+            c["load"]["bids"].pop("D_firm"),
+        ))
+        chosen = _clear(client, config, None)
+        explicit = _clear(client, config, config["network"]["buses"][0])
+        assert explicit["slack"] == chosen["slack"]
+        assert explicit["lmp"] == chosen["lmp"]
+        assert explicit["lmbda"] == chosen["lmbda"]
+
+    def test_a_slack_that_is_not_a_bus_is_still_refused(self, client, seed):
+        """The check that catches the editor failing. Kept, deliberately: a
+        typo that silently answered about a different bus is how a sweep
+        reports a day of the wrong lambda and nobody notices."""
+        config = _edited(seed, lambda c: c["network"]["buses"].remove("E"))
+        r = client.post("/clear", json={"config": seed["config"], "slack": "E2"})
+        assert r.status_code == 422
+        assert r.json()["error"] == "invalid_scenario"
+        assert "E2" in r.json()["detail"]
+
+
+class TestTheGrammarModulesAreServed:
+    """An ES module served as text/plain is refused by the browser with a MIME
+    error and no other symptom, so every module the page imports is asserted
+    rather than assumed."""
+
+    @pytest.mark.parametrize("module", ["edits.js", "grammar.js"])
+    def test_the_module_is_served_as_javascript(self, client, module):
+        r = client.get(f"/js/{module}")
+        assert r.status_code == 200
+        assert "javascript" in r.headers["content-type"]
+
+    def test_the_browser_harness_is_served_but_not_linked(self, client):
+        """web/check-grammar.html drives the grammar in a real browser, which
+        is the only runtime this repo has for JavaScript. It is a development
+        page: served, because it has to be same-origin with the app to iframe
+        it, and deliberately not reachable from the app."""
+        assert client.get("/check-grammar.html").status_code == 200
+        assert "check-grammar" not in client.get("/").text

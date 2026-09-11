@@ -179,8 +179,13 @@ button:hover {
    Sizes are NOT set here. SVG text is in user units, so a font-size in this
    file renders at whatever the viewBox happens to be, and the viewBox is
    fitted to a topology the editor can change. render.js sets every size. */
+/* Labels never take a click. A branch name sits on top of the line it names,
+   so a label that swallowed the pointer would make the middle of every wire
+   unhittable -- and the mark underneath is what carries the name the grammar
+   acts on. */
 .wire-label,
 .bus-label {
+  pointer-events: none;
   paint-order: stroke;
   stroke: var(--surface);
   stroke-linejoin: round;
@@ -361,4 +366,132 @@ th:last-child { padding-right: 0; }
 @media (max-width: 32rem) {
   .lever { grid-template-columns: 1fr 6ch; }
   .lever-name { grid-column: 1 / -1; }
+}
+
+/* --------------------------------------------------- W2.5, the editing grammar
+   Drag moves a bus; every other structural edit is an armed mode. An armed
+   mode must be visible in three places at once -- the pressed button, the
+   cursor, and the readout -- because each one is missable on its own. */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 0.5rem;
+}
+
+/* The armed button. A filled chip rather than a heavier weight: the register
+   forbids bold, and emphasis here comes from ground, not from type. */
+.toolbar button[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
+}
+
+/* Undo sits beside the readout, not in the armed group: what just happened
+   and how to put it back belong on one line. It is recessive because it is a
+   way out, not a thing to do. */
+.armed-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+}
+
+.armed-row .armed { flex: 1; }
+
+button.undo {
+  color: var(--ink-2);
+  flex: 0 0 auto;
+}
+
+/* The generator button's square. Sized to the type around it rather than to
+   a pixel, and painted exactly like .unit-mark on the map -- surface fill,
+   the button's own ink as the outline -- so pressing the button and seeing
+   the mark appear read as one object. On the armed (filled) button the ink
+   inverts with the label, which currentColor does for free. */
+.button-mark {
+  width: 0.8em;
+  height: 0.8em;
+  margin-left: 0.4em;
+  vertical-align: -0.05em;
+}
+
+.button-mark rect {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+.armed {
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+  margin: 0 0 0.7rem;
+  min-height: 2.6em;
+}
+
+/* Idle is the resting state and says less about itself; an armed mode gets
+   the ink, because it is a thing that will happen to the next click. */
+.armed[data-mode="move"] { color: var(--ink-muted); }
+.armed:not([data-mode="move"]) { color: var(--ink); }
+
+/* The cursor is the second of the three signals. Move is a grab; every armed
+   mode is a crosshair, because the next click lands somewhere precise. */
+#network { cursor: default; }
+#network[data-mode="move"] .bus { cursor: grab; }
+#network:not([data-mode="move"]) { cursor: crosshair; }
+
+/* The transparent shapes that make a small mark comfortable to hit. Pointer
+   comfort only: no fill, no stroke colour, nothing to see. */
+.hit {
+  fill: transparent;
+  stroke: transparent;
+}
+
+.wire-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-linecap: round;
+}
+
+/* A generator. A square so it never reads as a small bus, outlined in its
+   bus's hue so it reads as belonging to one, and filled with the surface so
+   a wire passing behind it does not run through it. Unlabelled by design --
+   see render.js; identity is carried by focus, hover and the readout. */
+.unit-mark {
+  fill: var(--surface);
+}
+
+/* Focus and hover, on the marks. The keyboard path is focus-and-activate, so
+   a focus ring is not a nicety here -- it is the only thing that says which
+   mark Enter will act on. */
+/* non-scaling-stroke, and it is not a flourish. Stroke width is in SVG user
+   units, and the viewBox is fitted to a topology the editor can change -- so
+   a plain stroke-width here would render thick on a two-bus network and hair-
+   thin on a sprawling one. This pins the ring to screen pixels, which is what
+   a focus ring is measured in. It is the same problem render.js solves for
+   text by sizing against the span; the difference is that CSS has a keyword
+   for it and text does not. */
+.bus:focus-visible .disc,
+.branch:focus-visible .wire,
+.unit:focus-visible .unit-mark {
+  stroke: var(--ink);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+
+.bus:focus,
+.branch:focus,
+.unit:focus { outline: none; }
+
+#network:not([data-mode="move"]) .branch:hover .wire { stroke: var(--ink); }
+#network:not([data-mode="move"]) .bus:hover .disc,
+#network:not([data-mode="move"]) .unit:hover .unit-mark { stroke: var(--ink); }
+
+/* The first bus of a connect, between its two clicks. A ring, like the
+   slack's, because both say "this bus is currently standing for something"
+   and neither changes what the bus is. */
+.bus[data-pending] .disc {
+  stroke: var(--ink);
+  stroke-width: 2.5px;
+  vector-effect: non-scaling-stroke;
 }
