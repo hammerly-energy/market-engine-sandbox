@@ -710,13 +710,14 @@ is demonstrably true.
 | **W0** | Serve one solve | FastAPI in `src/api/`, wrapping `clear()`. One `POST /clear` taking a scenario config as JSON. Two things that are not transport and must land here: a **wire format** — `clear()` keys dispatch, flows, μ and lmp by `(name, hour)` tuples, which JSON cannot express — and **input bounds**, because a public URL means a hostile POST body and a live HiGHS solve behind one is a resource-exhaustion vector. Cap buses, branches, generators, hours and body size; reject, don't truncate. | The published case5 LMPs come back over HTTP and match the in-process `clear()` result field for field, asserted as a test. The API adds no arithmetic. An oversized or malformed body returns a named 4xx, never a traceback and never a solve. | 1 day |
 | **W1** | Make the engine total | Less is missing here than it looks. Measured, not assumed: islanding, an isolated bus, a mistyped slack, a zero-reactance branch and duplicate names **already** raise clean named `ValueError`s — `ptdf.py:48` and `topology.py:59` were built for exactly this. A connected bus with no generator and no load prices correctly. Parallel branches solve correctly. The one real gap is **infeasibility**: too little capacity for the load returns a bare `RuntimeError: solve not optimal: infeasible` from `dispatch.py:235`, which is not a sentence anyone can show a visitor. | **Every input the editor can produce returns either a priced solve or one named, displayable reason.** The fuzz test over random topologies is the deliverable, not the `RuntimeError` fix — the fix is an hour and the fuzz test is what proves *What the engine already refuses* is complete rather than merely the cases someone thought of. The harder half is the three formulation questions under **Purpose**: what an island means, what the engine says when load cannot be served, and what happens when the slack is deleted. Each has more than one defensible answer. Pick one each and write down why — a refusal chosen deliberately is a design; a refusal inherited from `ptdf.py` is an accident. | 1.5 days |
 | **W2** | The editor | The eight levers, against the live engine: line limit, peak load per bus, add/remove bus, connect/disconnect line, add/remove generator, edit generator capacity and marginal cost, hour 1–24, slack bus. | Every lever re-solves and redraws. **Deleting the slack bus moves the dropdown, it does not 422** — the editor posts an explicit `slack` and owns keeping it in step with the bus list, and the engine refusing a slack that is not a bus is the check that catches it failing to. The slack dropdown is the acceptance test, **on a fixture with a unique optimum**: moving it must rearrange the λ/congestion split while every LMP and every settlement figure stays bit-identical. A UI that shows prices moving with the slack has a bug in it. Run that assertion on a degenerate fixture and it will flake, correctly — see trap 2. | 1.5 weeks |
-| **W3** | The views | Network map with buses coloured by LMP — which is where W2.3's identity colouring is replaced, and the three questions under *Colour on the network map* are settled at the top of this milestone, not mid-view; LMP split into λ + congestion; merit-order stack; settlement ledger with the residual; line flows against limits; live generation by unit; 24-hour heatmap. Three of these need fields `clear()` does not yet return — **add them in W0, not mid-W3**: a per-bus `congestion[bus, hour]`, which `pricing.py` already computes and then discards; per-generator `cost` and `pmax`, without which no merit-order stack can be drawn; and per-generator **status** (`off` / `interior` / `at_max`) with its `headroom` and `reduced_cost`. Status, *not* "the marginal unit" — that field was written at W0 and replaced within the hour, because under congestion there is no single marginal unit and three of case5's five buses have an LMP equal to no offer at all. Bus *coordinates* are not an engine concern at all — they are editor state, and they belong to W2. | Every number on screen is traceable to a field of the `clear()` return. Nothing is recomputed in JavaScript — the browser formats and draws, it does not do market arithmetic. The residual is displayed, not hidden, because a visible `≈ 0` is the claim the whole repo rests on. | 1 week |
+| **W3** | The views | **The page frame is decided first, before any view is coded** — the single 60ch column that carries four panels does not carry eleven, and a heatmap needs 24 columns of horizontal room a text measure will not give it. Retrofitting a grid under seven hand-coded views is the expensive order to do this in, and it is the same argument as settling colour at the top rather than mid-view. Then: network map with buses coloured by LMP — which is where W2.3's identity colouring is replaced, and the three questions under *Colour on the network map* are settled at the top of this milestone, not mid-view; LMP split into λ + congestion; merit-order stack; settlement ledger with the residual; line flows against limits; live generation by unit; 24-hour heatmap. Three of these need fields `clear()` does not yet return — **add them in W0, not mid-W3**: a per-bus `congestion[bus, hour]`, which `pricing.py` already computes and then discards; per-generator `cost` and `pmax`, without which no merit-order stack can be drawn; and per-generator **status** (`off` / `interior` / `at_max`) with its `headroom` and `reduced_cost`. Status, *not* "the marginal unit" — that field was written at W0 and replaced within the hour, because under congestion there is no single marginal unit and three of case5's five buses have an LMP equal to no offer at all. Bus *coordinates* are not an engine concern at all — they are editor state, and they belong to W2. | Every number on screen is traceable to a field of the `clear()` return. Nothing is recomputed in JavaScript — the browser formats and draws, it does not do market arithmetic. The residual is displayed, not hidden, because a visible `≈ 0` is the claim the whole repo rests on. Two views can be read against each other without scrolling between them, which is what the frame is for. | 1 w + 0.5 d |
 | **W4** | The frame and the deploy | Narrative scroll, one section per engine milestone, each with its live figure and a link to the source that implements it. Equations rendered next to the code. Scope statement. Deployed. | A stranger can reach it at a URL, rewire the network, and leave understanding that λ is a dual variable. The scope statement is on the page, not in a footer. | 3 days |
 
 #### W2, phase by phase
 
 W2 is the one milestone big enough to need its own ladder, so it has one. Ten
-phases summing to the 8.5 days the row is budgeted at. A phase is done when
+phases summing to 9 days — half a day over the row's original 8.5, which is
+what the keyboard path and the armed-state readout cost. A phase is done when
 the page still loads and the suite still passes; report progress as *phase n
 of 10*.
 
@@ -727,15 +728,76 @@ of 10*.
 | **W2.2** | Transport | 0.5 d | `postClear(state)`, and **request coalescing**: a monotonic id per request, stale responses dropped. A drag fires many solves and they return out of order, so the last response is not the last request. This is *not* debouncing the price — the flicker at a degenerate breakpoint is kept and shown (trap 3). Error surface switches on the stable code and prints `detail` verbatim |
 | **W2.3** | Minimal render | 1 d | Enough feedback to prove a lever worked, and no more: hand-written SVG buses and branches, a readout of LMP per bus, λ per island, and the settlement residual. Formatted only. Bus colour is **identity, and a placeholder for W3's price scale** — see *Colour on the network map*. **The seven views are W3 — do not build them here** |
 | **W2.4** | The five non-drag levers | 1 d | Line limit → the `limits` override, which is an argument to `clear()` and not a config edit. Peak load per bus, generator capacity, marginal cost. Hour 1–24 indexes the returned arrays and does **not** re-solve; the day comes back whole |
-| **W2.5** | The three drag levers | 2 d | Add/remove bus, connect/cut line, add/remove generator. Hit-testing by hand in SVG. **This is where the plan overruns.** Checkpoint at the end of its second day: if drag is still fighting you, adopt a framework for the editor alone. That retreat is correct on day 2 and worthless on day 9 |
+| **W2.5** | The editing grammar | 2.5 d | Add/remove bus, connect/cut line, add/remove generator. Drag a bus body to move it; every structural edit is an **armed mode** — press a button, then click the target. Hit-testing by hand in SVG. **This is where the plan overruns.** Checkpoint at the end of its second day: if drag is still fighting you, adopt a framework for the editor alone. That retreat is correct on day 2 and worthless on day 9. Three things ride along because they are the same hit-testing and the same state: the **armed-state readout**, the **keyboard path** (focus and activate, never a shortcut), and **undo**, pulled forward from W2.7 — see *W2 decision: the editing grammar* |
 | **W2.6** | The slack lever | 0.5 d | A dropdown over the bus list, posted explicitly on every request. **Deleting the slack bus moves the dropdown; it does not 422.** The editor owns keeping slack in step with its bus list, and the engine's refusal of a non-bus slack is the check that catches it failing to |
-| **W2.7** | Undo | 0.5 d | Snapshot stack of editor state, pushed on every mutation. Reset-to-case5 |
+| **W2.7** | The register fixes | 0.5 d | Three small things a usability review found, batched so the page is re-rendered and looked at once rather than three times. **Wire labels get their own screen token** — `--ink-muted` is 3.46:1 on the surface and branch names are load-bearing, not decorative; **the hour slider is visually distinct** from the four that re-solve, because that difference currently lives only in prose; **results sit above the levers**, so a moved slider does not land its answer below the fold. Half a day because CLAUDE.md requires rendering and inspecting each one, and moving one label routinely creates a collision somewhere else |
 | **W2.8** | Acceptance tests | 1 d | The slack assertion, **on a fixture whose optimum is verified unique first**: moving the slack rearranges λ and the congestion split while every LMP, payment, revenue and rent stays bit-identical. On a degenerate fixture it flakes, correctly — trap 2 against trap 3. Plus the delete-the-slack test, and `toConfig()` round-tripping to w1.yaml's numbers bit for bit |
 | **W2.9** | The degeneracy decision | 0.5 d | Detect degeneracy and return a flag, so a view can say `λ ∈ [20, 35]` where the repo's own tests would — or accept that the site shows one arbitrary member of the set without comment. **Decided before W3, not during.** If it is "detect", that is an engine change and it is not free: scoped here, built at the top of W3 |
 
 Two things W2 does not touch: the seven views (W3), and market arithmetic in
 JavaScript (never). If a lever needs a number `clear()` does not return,
 `clear()` grows.
+
+#### W2 decision: the editing grammar
+
+**Drag moves a bus. Every other structural edit is an armed mode.** Press
+*Add bus*, *Add line*, *Add generator* or *Remove*, then click the target.
+No modifier keys, no right-click, no keyboard shortcuts — one grammar, and
+the same one for adding and removing.
+
+```
+  idle  ──press a button──>  armed  ──click a target──>  edit applied, idle
+   ▲                           │
+   └──── Esc, or press the ────┘
+         armed button again
+```
+
+The consequence that matters is not stylistic. With drag reserved for moving,
+**a bus is never a drop target**, so hit-testing only has to answer *which
+mark is under the pointer* — there is no drag-source/drop-target distinction
+and no rubber-band line to hit-test against. That is most of what the ladder
+flags as W2.5's overrun risk, removed by the grammar rather than by
+cleverness.
+
+Three things follow, and they are in W2.5 rather than later because they are
+the same hit-testing and the same state object:
+
+- **An armed mode must be visible.** A pressed button state, a cursor, and a
+  readout naming the mode. A visitor who arms *Add line*, gets distracted, and
+  later clicks a bus must not silently connect two buses they had stopped
+  thinking about.
+- **Undo is pulled forward from W2.7**, and it is what makes *Remove* safe
+  rather than a confirmation step. A confirm taxes the most exploratory act on
+  the page, and the site's whole pitch is that rewiring is safe to try;
+  editor state is plain data, so a snapshot stack is a `structuredClone` per
+  mutation. Cheaper than the dialog it replaces, and it removes a class of
+  question rather than answering one.
+- **A keyboard path, which is focus and activate — not a shortcut.** Marks
+  become focusable and Enter completes an armed mode. This does not reopen
+  the no-shortcuts decision; it is the ordinary activation semantics a button
+  already has, extended to the click half of the grammar. Without it W2.5
+  ships a page where every slider is keyboard-operable and no structural edit
+  is, which is a regression visible in the same session.
+
+#### W2 decision: `--ink-muted` is a print token, and the screen needs its own
+
+Measured, not eyeballed: `#8a8880` on `#fcfcfb` is **3.46:1**, under AA's 4.5
+for normal-size text. It paints the branch labels on the network map, and a
+branch name is load-bearing — the map is unreadable without knowing which
+line is `DE`.
+
+The trap is that this looks like a one-line CSS fix and is not. `#8a8880` is
+`INK_MUTED` in five modules under `src/viz/`, so it is the shared screen-and-
+print palette, and editing `style.css` alone would silently desync a grey
+between the PDF and the page — the exact drift the shared palette exists to
+prevent.
+
+So: **wire labels get their own screen token near `--ink-2`** (7.73:1), and
+the print figures are left alone. Recessive on paper at 300 dpi is a
+different problem from recessive on a backlit monitor at 14 px, and the
+register's demand is that text be recessive, not that it be the same hex
+everywhere. `--ink-muted` keeps its meaning for what is genuinely decorative.
+
 
 Do not skip to a later milestone. Each one's test suite is the foundation for the
 next, and the invariants established early are what catch the subtle failures
