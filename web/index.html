@@ -7,109 +7,162 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <h1>Market Engine</h1>
-  <p class="subhead">
-    A nodal DC market clearing engine. LP dispatch, duals as prices. Five
-    synthetic generators on a five-bus teaching case, cost-based offers. No
-    unit commitment, no storage, no reserves.
-  </p>
+  <header class="masthead">
+    <h1>Market Engine</h1>
+    <p class="subhead">
+      A nodal DC market clearing engine. LP dispatch, duals as prices. Five
+      synthetic generators on a five-bus teaching case, cost-based offers. No
+      unit commitment, no storage, no reserves, and no comparison against
+      published prices.
+    </p>
+  </header>
 
-  <section class="panel figure">
-    <h2>Network</h2>
-    <div class="toolbar" id="toolbar" role="group"
-         aria-label="Editing modes"></div>
-    <div class="armed-row">
-      <p class="armed" id="armed" role="status" aria-live="polite"></p>
-      <span id="undo-slot"></span>
+  <!-- W3.0, the frame. The rail holds what the visitor manipulates and the
+       views hold what the engine answered, so a lever and the figure it moves
+       are on screen together and a view can be read against the map without
+       scrolling between them. -->
+  <div class="frame">
+    <div class="rail">
+      <section class="panel figure">
+        <h2>Network</h2>
+        <div class="toolbar" id="toolbar" role="group"
+             aria-label="Editing modes"></div>
+        <div class="armed-row">
+          <p class="armed" id="armed" role="status" aria-live="polite"></p>
+          <span id="undo-slot"></span>
+        </div>
+        <svg id="network" tabindex="0" role="application"
+             aria-label="The network: buses, the branches between them, and the
+                         generators at each bus. Tab to a mark and press Enter
+                         to apply the armed mode."></svg>
+        <p class="caption" id="network-caption">
+          Buses, branches and generators as the editor declares them. Colour is
+          identity, not price — it matches the figures in <code>src/viz/</code>.
+          The ringed bus is the slack, which is an accounting origin: no LMP,
+          dispatch, flow or settlement figure depends on which bus it is. A
+          square is a generator; its bus, capacity and offer are on hover and on
+          focus, because five more names would collide at this scale.
+        </p>
+        <p class="caption">
+          Drag a bus to move it — coordinates are editor state and never cross
+          the wire. Every other edit is armed first: press a button above, then
+          click the target. Esc disarms. Nothing asks for confirmation, because
+          undo is what makes removing something safe to try.
+        </p>
+      </section>
+
+      <section class="panel">
+        <h2>Levers</h2>
+        <p class="note">
+          A filled thumb re-solves. The hollow one indexes a day already on the
+          page. Nothing is debounced — at a degenerate breakpoint the price
+          genuinely flickers between equally valid values, and that is shown
+          rather than smoothed away.
+        </p>
+        <div id="levers"></div>
+      </section>
     </div>
-    <svg id="network" tabindex="0" role="application"
-         aria-label="The network: buses, the branches between them, and the
-                     generators at each bus. Tab to a mark and press Enter to
-                     apply the armed mode."></svg>
-    <p class="caption" id="network-caption">
-      Buses, branches and generators as the editor declares them. Colour is
-      identity, not price — it matches the figures in <code>src/viz/</code>.
-      The ringed bus is the slack, which is an accounting origin: no LMP,
-      dispatch, flow or settlement figure depends on which bus it is. A square
-      is a generator; its bus, capacity and offer are on hover and on focus,
-      because five more names would collide at this scale.
-    </p>
-    <p class="caption">
-      Drag a bus to move it — coordinates are editor state and never cross the
-      wire. Every other edit is armed first: press a button above, then click
-      the target. Esc disarms. Nothing asks for confirmation, because undo is
-      what makes removing something safe to try.
-    </p>
-  </section>
 
-  <section class="panel" data-results>
-    <h2>Prices</h2>
-    <p class="note" id="hour-note">Waiting for the first solve…</p>
-    <div id="prices"></div>
-    <p class="caption">
-      LMP at each bus for the hour shown. Every number is a field of the
-      <code>clear()</code> return, rounded — nothing on this page is computed
-      in JavaScript.
-    </p>
-  </section>
+    <main class="views">
+      <section class="panel" data-results>
+        <h2>Prices</h2>
+        <p class="note" id="hour-note">Waiting for the first solve…</p>
+        <div id="prices"></div>
+        <p class="caption">
+          LMP at each bus for the hour shown. Every number is a field of the
+          <code>clear()</code> return, rounded — nothing on this page is
+          computed in JavaScript.
+        </p>
+      </section>
 
-  <section class="panel" data-results>
-    <h2>Islands and the Settlement Residual</h2>
-    <div id="islands"></div>
-    <p class="caption">
-      One energy balance, one λ and one settlement identity per island, per
-      hour. λ is the LMP at that island's slack. The residual is congestion
-      rent measured from the money — <code>payments − revenue</code> — minus
-      the same rent derived from the duals, <code>−Σ μ·f</code>. Two
-      independent routes to one number; it is displayed rather than hidden
-      because a visible <code>≈ 0</code> is the claim the rest of this rests
-      on.
-    </p>
-  </section>
+      <!-- The five views still to be built, as empty slots. They are here
+           at W3.0 so the frame is verified carrying eleven panels before any
+           of them is coded, which is the order the retrofit is expensive in. -->
+      <section class="panel" data-results data-slot>
+        <h2>LMP Split</h2>
+        <p class="note">Not built yet. λ and the congestion component, per bus.</p>
+        <div id="split"></div>
+      </section>
 
-  <section class="panel wide">
-    <h2>Levers</h2>
-    <p class="note">
-      A filled thumb re-solves. The hollow one indexes a day already on the
-      page. Nothing is debounced — at a degenerate breakpoint the price
-      genuinely flickers between equally valid values, and that is shown
-      rather than smoothed away.
-    </p>
-    <div id="levers"></div>
-  </section>
+      <section class="panel" data-results data-slot>
+        <h2>Merit Order</h2>
+        <p class="note">Not built yet. Offers stacked against served demand.</p>
+        <div id="merit"></div>
+      </section>
 
-  <section class="panel">
-    <h2>Editor State</h2>
-    <dl class="kv" id="editor"></dl>
-  </section>
+      <section class="panel" data-results data-slot>
+        <h2>Line Flows Against Limits</h2>
+        <p class="note">Not built yet. Flow, rating, loading and μ, per line.</p>
+        <div id="flows"></div>
+      </section>
 
-  <section class="panel">
-    <h2>Against the Server Caps</h2>
-    <dl class="kv" id="limits"></dl>
-    <p class="status" id="status">Contacting server…</p>
-  </section>
+      <section class="panel" data-results data-slot>
+        <h2>Generation by Unit</h2>
+        <p class="note">Not built yet. Dispatch, headroom and reduced cost, per unit.</p>
+        <div id="units"></div>
+      </section>
 
-  <section class="panel">
-    <h2>Traffic</h2>
-    <p class="note">
-      Every request carries a monotonic id and only the freshest response is
-      applied — a drag fires many solves and they return out of order. A
-      burst is what the solver sees during a drag: one applied, the rest
-      dropped.
-    </p>
-    <p class="controls">
-      <button type="button" id="solve">Solve once</button>
-      <button type="button" id="burst">Burst of five</button>
-    </p>
-    <ul class="log" id="log"></ul>
-  </section>
+      <!-- Spans the row: the residual is the last column, and a ledger whose
+           central claim needs a sideways scroll to reach has not displayed it. -->
+      <section class="panel span-all" data-results>
+        <h2>Islands and the Settlement Residual</h2>
+        <div id="islands"></div>
+        <p class="caption">
+          One energy balance, one λ and one settlement identity per island, per
+          hour. λ is the LMP at that island's slack. The residual is congestion
+          rent measured from the money — <code>payments − revenue</code> — minus
+          the same rent derived from the duals, <code>−Σ μ·f</code>. Two
+          independent routes to one number; it is displayed rather than hidden
+          because a visible <code>≈ 0</code> is the claim the rest of this rests
+          on.
+        </p>
+      </section>
 
-  <section class="panel wide">
-    <details>
-      <summary id="body-summary">What Would Be Posted</summary>
-      <pre id="body">…</pre>
-    </details>
-  </section>
+      <section class="panel span-all" data-results data-slot>
+        <h2>The Day</h2>
+        <p class="note">Not built yet. LMP at every bus across all 24 hours.</p>
+        <div id="heatmap"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Evidence about the client, not views of the market. Below the frame
+       because a visitor never needs them and a developer always knows where
+       they are. -->
+  <div class="diagnostics">
+    <section class="panel">
+      <h2>Editor State</h2>
+      <dl class="kv" id="editor"></dl>
+    </section>
+
+    <section class="panel">
+      <h2>Against the Server Caps</h2>
+      <dl class="kv" id="limits"></dl>
+      <p class="status" id="status">Contacting server…</p>
+    </section>
+
+    <section class="panel">
+      <h2>Traffic</h2>
+      <p class="note">
+        Every request carries a monotonic id and only the freshest response is
+        applied — a drag fires many solves and they return out of order. A
+        burst is what the solver sees during a drag: one applied, the rest
+        dropped.
+      </p>
+      <p class="controls">
+        <button type="button" id="solve">Solve once</button>
+        <button type="button" id="burst">Burst of five</button>
+      </p>
+      <ul class="log" id="log"></ul>
+    </section>
+
+    <section class="panel">
+      <details>
+        <summary id="body-summary">What Would Be Posted</summary>
+        <pre id="body">…</pre>
+      </details>
+    </section>
+  </div>
 
   <script type="module" src="js/main.js"></script>
 </body>

@@ -106,9 +106,16 @@ function node(name, attrs = {}, text = null) {
  * module knows the span. Colour stays in the stylesheet, which is the half
  * that does not depend on it.
  */
-const FIGURE_PX = 496; // #network's max-width, in px. The two must agree.
+/* The rendered width, in CSS px, measured at draw time rather than asserted.
+   It used to be a constant 496 matching #network's max-width, and W3.0's
+   frame broke that: .frame .panel clears .figure's cap, so between 582 and
+   959 px the SVG grew with the window and the bus labels went with it --
+   29.6 px at a 959 px window, on a page whose largest type is 16.8. Measured
+   instead, a label is --type-title at every width, which is what the
+   hierarchy asks for. Falls back to 496 when the SVG is not laid out yet. */
 const REM = 16;
-const px = (n, span) => (n * span) / FIGURE_PX;
+let figurePx = 496;
+const px = (n, span) => (n * span) / figurePx;
 const rem = (n, span) => px(n * REM, span);
 
 /* Branches between the same pair of buses, bowed apart so n parallel lines
@@ -203,6 +210,7 @@ function viewBox(buses) {
 */
 export function renderNetwork(svg, state) {
   svg.replaceChildren();
+  figurePx = svg.clientWidth || 496;
   const at = new Map(state.buses.map((b) => [b.name, b]));
   const offsets = bow(state.branches);
 

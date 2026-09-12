@@ -42,6 +42,11 @@
   --type-title: 1.05rem;
   --type-label: 0.95rem;
   --type-annot: 0.875rem;
+
+  /* W3.0. The rail is 496 px of map plus .figure's own padding and border.
+     render.js sizes its text as a fraction of the viewBox against that same
+     496, so this may not be rounded to something tidier. */
+  --rail: calc(496px + 2.2rem + 2px);
 }
 
 * { box-sizing: border-box; }
@@ -94,7 +99,9 @@ dl.kv {
 dl.kv dt { color: var(--ink-2); }
 dl.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
 
-.status { font-size: var(--type-annot); color: var(--ink-muted); }
+/* --ink-wire, not --ink-muted: this is the only line that reports the server
+   is unreachable, and 3.46:1 is under AA. Same measurement as W2.7's. */
+.status { font-size: var(--type-annot); color: var(--ink-wire); }
 .status[data-state="error"] { color: var(--flow-pos); }
 
 .panel.wide { max-width: 68ch; }
@@ -173,7 +180,10 @@ button:disabled {
   color: var(--ink-2);
 }
 
-.log li[data-state="ok"] { color: var(--hue-2); }
+/* #007a59, not --hue-2 #009e73, which is 3.33:1 on the surface. The hue
+   itself is an identity colour for a mark, and a mark is held to 3:1, not to
+   4.5 -- this is text. */
+.log li[data-state="ok"] { color: #007a59; }
 .log li[data-state="error"] { color: var(--flow-pos); }
 .log li[data-state="muted"] { color: var(--ink-muted); }
 
@@ -187,9 +197,16 @@ button:disabled {
    have to agree: widen this and the labels grow off the hierarchy. */
 .figure { max-width: calc(496px + 2.2rem + 2px); }
 
+/* Capped on the drawing, not on the panel: .frame .panel clears .figure's
+   max-width, so in the single-column band the panel is as wide as the window
+   and the map would be drawn at 815 px -- the same discs and the same lines,
+   spread over a full viewport of height. The cap sets the density; render.js
+   measures the rendered width rather than assuming this number, so the two
+   cannot silently disagree again. */
 #network {
   display: block;
   width: 100%;
+  max-width: 496px;
   height: auto;
   overflow: visible;
 }
@@ -565,7 +582,10 @@ button.undo {
 
 /* Idle is the resting state and says less about itself; an armed mode gets
    the ink, because it is a thing that will happen to the next click. */
-.armed[data-mode="move"] { color: var(--ink-muted); }
+/* Move is the page's default state, so this is the first instruction a
+   visitor reads and it was the worst-contrast text on the page at 3.46:1.
+   Recessive against the armed modes below it, and legible. */
+.armed[data-mode="move"] { color: var(--ink-wire); }
 .armed:not([data-mode="move"]) { color: var(--ink); }
 
 /* The cursor is the second of the three signals. Move is a grab; every armed
@@ -628,4 +648,109 @@ button.undo {
   stroke: var(--ink);
   stroke-width: 2.5px;
   vector-effect: non-scaling-stroke;
+}
+
+/* --------------------------------------------------------- W3.0, the frame
+   Decided before any view is coded, because retrofitting a grid under seven
+   hand-written views is the expensive order to do this in.
+
+   Two columns. The rail holds what the visitor manipulates -- the map and the
+   levers -- and sticks, so a lever and the view it moves are on screen at the
+   same time. The views column carries the answers and reflows from two cards
+   to one as the window narrows.
+
+       --rail = 496 + 2.2rem + 2px, the width .figure was already fitted to.
+       render.js sizes its text as a fraction of the viewBox against that same
+       496, so the rail may not be set to a round number instead.
+
+   This supersedes W2.7's "results sit above the levers". The reason there was
+   that a moved slider must not land its answer below the fold; a sticky rail
+   serves it for every view rather than for the two that happened to be above
+   the levers. */
+
+.masthead { margin-bottom: 1.25rem; }
+
+.frame {
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+/* Taller than the viewport, because the map carries two captions. A sticky
+   element taller than its viewport pins at the wrong end and the levers stay
+   below the fold, which is what sticking was for -- so the rail gets its own
+   scroll and keeps it to itself. */
+.rail {
+  position: sticky;
+  top: 1.5rem;
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.views {
+  display: grid;
+  /* auto-fit, not a fixed count: the number of columns is a function of the
+     window, and 22rem is the narrowest a table of five buses reads at. */
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+/* The grid sets the card's width and a text block inside it still wants a
+   measure. 60ch is what .panel carried before the frame cleared it; without
+   this a caption runs to 98ch in the single-column views band between 960 and
+   1317 px. */
+.views .caption,
+.views .note { max-width: 60ch; }
+
+/* A table is wider than the card whenever the scenario grows a column, and
+   `white-space: nowrap` means it cannot reflow. Its own scroll container, per
+   the register: the page body never scrolls sideways, a table may. */
+.views .panel > div { overflow-x: auto; }
+
+/* The heatmap carries 24 hourly columns and a text measure will not give it
+   the horizontal room. */
+.views .span-all { grid-column: 1 / -1; }
+
+/* Inside the frame the grid sets the width, so the prose cap would only ever
+   fight it. It still governs the diagnostics below, which are a single
+   column of text. */
+.frame .panel { max-width: none; }
+
+.diagnostics {
+  margin-top: 1rem;
+  max-width: 60ch;
+}
+
+/* A view whose code has not landed yet. Recessive and labelled rather than
+   absent, so the frame can be judged at its full height of eleven panels.
+   These slots come out before the deploy: a page half made of dashed
+   rectangles argues against the scope statement rather than for it. */
+.panel[data-slot] { border-style: dashed; }
+.panel[data-slot] .note { color: var(--ink-wire); }
+
+/* Below this the rail and the views do not both fit: 533px of map, a 1rem
+   gap and 22rem of view is 901px. One column, and the rail stops sticking --
+   a sticky element taller than the viewport scrolls badly. */
+@media (max-width: 60rem) {
+  .frame { grid-template-columns: minmax(0, 1fr); }
+  .rail { position: static; }
+}
+
+/* Buttons had no focus ring of their own, so they took Chrome's default --
+   and an armed button is ink-on-ink, where that default is close to
+   invisible. The sliders, selects and SVG marks all carry this ring already;
+   this is the same one. */
+button:focus-visible {
+  outline: 1px solid var(--ink-2);
+  outline-offset: 2px;
+}
+
+/* A pressed button is filled with --ink, so the ring inverts to stay visible
+   against its own ground. */
+.toolbar button[aria-pressed="true"]:focus-visible,
+button[aria-pressed="true"]:focus-visible {
+  outline-color: var(--surface);
 }
