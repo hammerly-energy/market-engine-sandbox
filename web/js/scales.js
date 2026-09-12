@@ -5,13 +5,13 @@
  *
  * Two decisions are baked in, and both were measured rather than argued.
  *
- * IDENTITY IS GONE FROM THE BUS. A bus used to be an Okabe-Ito hue matching
+ * Identity is gone from the bus. A bus used to be an Okabe-Ito hue matching
  * src/viz. It is now a neutral disc with its name inside it and a ring that
  * carries the price. So the map has two coloured marks -- rings and lines --
  * and they must not be confused for one another at any point on either
  * scale.
  *
- * WHICH MEANS THE RING TAKES NO HUE AT ALL. The line ramp runs blue to
+ * The ring therefore takes no hue at all. The line ramp runs blue to
  * vermillion, and under deuteranopia every warm hue collapses toward that
  * vermillion and every cool hue toward that blue. There is no third hue
  * free on this map. So the channels split: lines carry hue, and carry

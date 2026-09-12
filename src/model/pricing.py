@@ -33,7 +33,7 @@ def congestion(res, buses, lines, PTDF):
     throwing the split away. The split is the interesting half: lambda is one
     number for the whole system and says nothing about location, so every
     difference between two buses lives here. A view that colours a map by LMP
-    shows where power is dear; a view that colours it by this shows WHY.
+    shows where power is dear; a view that colours it by this shows why.
 
     It is zero at the slack by construction -- PTDF[l, slack] = 0 for every
     line -- which is the entire content of the slack choice (trap 2). Read the
@@ -57,7 +57,7 @@ def lmps(res, buses, lines, PTDF, island_of):
     {(bus, t): $/MWh}.
 
     island_of is {bus: island}, and it is what makes this work on a cut
-    network: a bus is priced against ITS OWN market's lambda, not against a
+    network: a bus is priced against its own market's lambda, not against a
     system lambda that no longer exists. For a connected network every bus
     maps to the same island and the sum below is M4's, unchanged.
     """
@@ -76,15 +76,15 @@ def lmps(res, buses, lines, PTDF, island_of):
 def generator_status(res, Pmax, tol=1e-6):
     """Where each generator sits in its own range. {(gen, t): str}.
 
-    One of three words, and it is a statement about DISPATCH, not about price:
+    One of three words, and it is a statement about dispatch, not about price:
 
         "off"        p == 0.        Offered, not taken.
         "interior"   0 < p < Pmax.  The LP could move it either way.
         "at_max"     p == Pmax.     Taken in full; it would sell more.
 
     This replaces an earlier marginal_units(), which returned the interior
-    units under the name "marginal" and so made a PRICE claim out of a
-    DISPATCH test. The two are not the same question, and case5 at its peak
+    units under the name "marginal" and so made a price claim out of a
+    dispatch test. The two are not the same question, and case5 at its peak
     hour shows the gap in both directions: two units are interior at once
     (DE binds, so E is its own pricing region and Brighton and Solitude each
     set their own bus's price), while three of five buses have an LMP equal to
@@ -114,7 +114,7 @@ def headroom(res, Pmax):
 
     Returned rather than left to the caller because the caller is a browser,
     and the boundary rule says the browser formats numbers and does not
-    compute them. A subtraction is a small thing to hand over; a SECOND place
+    compute them. A subtraction is a small thing to hand over; a second place
     where Pmax and p are combined is not.
     """
     return {(g, t): float(Pmax[g] - p) for (g, t), p in res["p"].items()}
@@ -142,7 +142,7 @@ def reduced_costs(lmp, cost, gen_bus, hours):
     disagreement is a dual extraction bug, and it is the kind that returns
     plausible numbers.
 
-    One case looks like a contradiction and is not: at_max WITH a reduced cost
+    One case looks like a contradiction and is not: at_max with a reduced cost
     of zero. The unit is full and indifferent at the same time, which means
     load has landed exactly on a capacity breakpoint and the price there is an
     interval rather than a number -- trap 3, the degenerate case M0 asserts
@@ -184,13 +184,13 @@ def price_uniqueness(
          balance row    an active row
 
         basic < rows    a row has no variable free to set its price, so the
-                        dual has room to move: lambda is an INTERVAL and the
+                        dual has room to move: lambda is an interval and the
                         returned number is one end of it.
 
         basic == rows   both pinned.
 
         basic > rows    spare variables sit at zero reduced cost. The price is
-                        unique and WHO RUNS is not.
+                        unique and who runs is not.
 
     The two directions are different sentences and do not collapse into one
     "degenerate" flag. Measured on case5 with every offer at $25 and both
@@ -204,7 +204,7 @@ def price_uniqueness(
     two LPs per island-hour to maximize and minimize lambda over the dual
     feasible set -- and is deferred to W4.
 
-    Only PRICED bids count. An inelastic bid is a constant on the balance row,
+    Only priced bids count. An inelastic bid is a constant on the balance row,
     not a variable, so it can hold nothing.
 
     The flag inherits the flicker rather than curing it. It reads mu against

@@ -2,7 +2,7 @@
 
 Everything here already existed, scattered across a __main__ block and a test
 helper: build the PTDF, solve the LP, assemble the prices, check the identity.
-Nothing new is formulated. What is new is that the whole pipeline has ONE name,
+Nothing new is formulated. What is new is that the whole pipeline has one name,
 so a caller that is not a figure -- a parameter sweep, an HTTP handler, a
 notebook -- can run a market without reassembling the sequence by hand and
 getting one step subtly wrong.
@@ -12,11 +12,11 @@ getting one step subtly wrong.
      buses      PTDF[l,i]           p, lambda, mu           LMP[i]    residual
      branches                                                          == 0
 
-The slack is an ARGUMENT, not a Scenario field. It is a choice this layer
+The slack is an argument, not a Scenario field. It is a choice this layer
 makes, and per CLAUDE.md trap 2 nothing physical depends on it: changing it
-shifts every LMP by a constant and moves no dispatch, no flow, and no price
-DIFFERENCE. It defaults to whatever the config recorded so that the common
-case needs no second argument.
+moves lambda and moves no LMP at all, no dispatch, no flow and no settlement
+figure. It defaults to whatever the config recorded so that the common case
+needs no second argument.
 """
 
 import numpy as np
@@ -78,8 +78,8 @@ def clear(scenario, slack=None, limits=None):
             f"{len(buses)} bus(es) and {len(branches)} branch(es)"
         )
 
-    # A slack that is no longer a bus is CHOSEN when it came from the config
-    # and REFUSED when the caller named it. The two are different claims:
+    # A slack that is no longer a bus is chosen when it came from the config
+    # and refused when the caller named it. The two are different claims:
     #
     #     slack=          an assertion by this caller, about this call. If it
     #                     names a bus that is not there, the caller is wrong
@@ -87,7 +87,7 @@ def clear(scenario, slack=None, limits=None):
     #                     about a different bus is how a sweep reports 24
     #                     hours of the wrong lambda and nobody notices.
     #
-    #     provenance      a RECORD, written when the config was parsed and
+    #     provenance      a record, written when the config was parsed and
     #                     possibly stale by now. The editor deletes a bus and
     #                     the recorded slack names something gone. Refusing
     #                     there would make deleting the slack the one edit
@@ -95,7 +95,7 @@ def clear(scenario, slack=None, limits=None):
     #                     physical reason, because the slack is an accounting
     #                     origin (trap 2). Any bus works, no LMP, dispatch,
     #                     flow or settlement figure depends on which, and only
-    #                     the LEVEL of lambda moves.
+    #                     the level of lambda moves.
     #
     # The fallback is the first bus in the caller's order, so the same config
     # gives the same answer twice and the choice is derivable without running
@@ -113,7 +113,7 @@ def clear(scenario, slack=None, limits=None):
             slack = buses[0]
 
     lines = [br.name for br in branches]
-    # Row order is branches, column order is buses, and both are fixed HERE and
+    # Row order is branches, column order is buses, and both are fixed here and
     # passed down. Every consumer of the PTDF re-derives its index from these
     # two lists rather than from its own ordering assumption.
     #
@@ -160,7 +160,7 @@ def clear(scenario, slack=None, limits=None):
 
     # What each bid actually got. Inelastic bids got what they asked for by
     # definition; elastic ones got what the market decided they were worth.
-    # Reported for BOTH so a caller never has to know which kind it is
+    # Reported for both so a caller never has to know which kind it is
     # holding -- the distinction is the engine's, not the reader's.
     served = {(b.name, t): mw for b in scenario.bids if not b.elastic
               for t, mw in b.mw.items()}
@@ -198,7 +198,7 @@ def clear(scenario, slack=None, limits=None):
         hours=scenario.hours,
     )
 
-    # Settlement is per island AND per hour, because the identity is per
+    # Settlement is per island and per hour, because the identity is per
     # island per hour. Summing the day would let a positive residual in one
     # hour cancel a negative one in another; summing the islands would do the
     # identical thing one dimension over, and a cut network is exactly when
@@ -212,7 +212,7 @@ def clear(scenario, slack=None, limits=None):
                     gen_mw[bus] += res["p"][g, t]
             settlement[home, t] = settle(
                 lmp={b: lmp[b, t] for b in group},
-                # SERVED, not declared. Load pays for what it took. Billing
+                # Served, not declared. Load pays for what it took. Billing
                 # declared demand while the injection carries served demand
                 # puts the difference straight into the residual, where it
                 # reads like a PTDF sign error and is not one.
