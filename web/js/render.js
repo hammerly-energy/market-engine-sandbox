@@ -33,29 +33,19 @@
  */
 
 import { generatorsAt } from "./edits.js";
+import { NO_PRICE, priceAt, priceDomain, priceInk, rampCss } from "./scales.js";
 
 const NS = "http://www.w3.org/2000/svg";
 
-/* Okabe-Ito in config bus order, matching src/viz/network.py so a bus is the
-   same hue in the PDF and on screen.
+/* W3.2 replaced the bus identity palette. A bus used to be an Okabe-Ito hue
+   in config bus order, matching src/viz/network.py. It is now a neutral disc
+   with its name inside it and a ring carrying its LMP -- so there is no bus
+   identity colour on this page at all, and nothing here to keep in step with
+   the print figures' bus colours.
 
-   This is a placeholder and it changes at W3, whose network map colours a bus
-   by its LMP. Identity is the right encoding for a render that has no view to
-   be part of yet; it is the wrong one for a finished map. What replaces it --
-   which mark keeps identity, sequential level or diverging congestion, and
-   what the domain is fixed to -- is settled at the top of W3. See CLAUDE.md,
-   "Colour on the network map". Do not quietly turn this array into a ramp.
-
-   Identity, not a ramp, and never cycled:
-   the editor can add a seventh bus, and a palette that wrapped would give it
-   bus A's colour and quietly assert they were the same thing. Past the end of
-   the palette, identity has run out and the disc says so by going neutral. */
-const BUS_HUE = ["#0072b2", "#e69f00", "#009e73", "#cc79a7", "#56b4e9", "#d55e00"];
-const NO_HUE = "var(--ink-muted)";
-
-export function hueFor(index) {
-  return index < BUS_HUE.length ? BUS_HUE[index] : NO_HUE;
-}
+   The scale, and why the ring takes no hue, are in scales.js. Line colour is
+   W3.6 and lines are still painted the wire grey, which is that ramp's
+   neutral, so an idle line already looks the way it will. */
 
 /* ------------------------------------------------------------- formatting */
 
@@ -141,8 +131,10 @@ function bow(branches) {
   return offsets;
 }
 
-/* Where a bus's name hangs: opposite the mean direction of its branches, so
- * the label sits on empty ground rather than across a line.
+/* The empty ground around a bus: opposite the mean direction of its
+ * branches. It placed the bus label until W3.2 moved that inside the disc,
+ * and it still places the generator marks, which have the same problem --
+ * anything hung off a bus wants to miss the lines meeting it.
  *
  * CLAUDE.md resolves collisions by Moving Text, never by shrinking it, and
  * the print figures do this by hand -- src/viz/network.py carries a literal
@@ -165,16 +157,6 @@ function labelDirection(bus, branches, at) {
   const len = Math.hypot(ux, uy);
   if (len < 1e-9) return { x: 0, y: -1 };
   return { x: -ux / len, y: -uy / len };
-}
-
-/* The anchor that keeps the text clear of the disc it names, given that
-   direction. A label placed to the right must start there; one placed
-   above must sit on its baseline. */
-function anchorFor(dir) {
-  return {
-    "text-anchor": dir.x > 0.3 ? "start" : dir.x < -0.3 ? "end" : "middle",
-    "dominant-baseline": dir.y > 0.3 ? "hanging" : dir.y < -0.3 ? "auto" : "middle",
-  };
 }
 
 /* The viewBox the drawing needs, padded. Fitted to the buses rather than
@@ -208,7 +190,7 @@ function viewBox(buses) {
         by a round trip and the editor feels broken. Prices come from the
         response and go stale visibly (see markStale); topology does not.
 */
-export function renderNetwork(svg, state) {
+export function renderNetwork(svg, state, cleared = null, hour = 0) {
   svg.replaceChildren();
   figurePx = svg.clientWidth || 496;
   const at = new Map(state.buses.map((b) => [b.name, b]));
@@ -217,21 +199,47 @@ export function renderNetwork(svg, state) {
   const box = viewBox(state.buses);
   svg.setAttribute("viewBox", `${box.x} ${box.y} ${box.w} ${box.h}`);
   const s = box.span;
+  /* The price scale for this solve. Null before the first one lands and for
+     a bus the response does not carry -- a bus the editor just added, which
+     is drawn immediately and priced a round trip later. */
+  const domain = cleared ? priceDomain(cleared) : null;
+  const lmpAt = (bus) =>
+    cleared && cleared.lmp[bus] ? cleared.lmp[bus][hour] : null;
+
   const size = {
-    disc: px(14, s),
-    ring: px(20, s),
+    /* W3.2. The disc holds the bus name, so it is sized to the name rather
+       than to itself: a --type-title capital is about 12 units tall and the
+       ring must not crowd it. The old disc was 14 and carried its label
+       outside. */
+    disc: px(17, s),
+    /* The ring carries the price twice, in lightness and in width. Redundant
+       on purpose: a double encoding survives a grayscale print, a cheap
+       monitor and every colour vision type, and the two channels agree by
+       construction because both read the same t. Width also gives the eye an
+       edge-to-edge comparison that lightness alone does not -- two rings four
+       shades apart are easier to rank when one is visibly heavier.
+
+       2.5 to 7 units. The heaviest ring reaches r + 3.5 = 20.5, which clears
+       the slack ring at 24, and eats inward to 13.5, which clears the name. */
+    priceRingMin: px(2.5, s),
+    priceRingSpan: px(4.5, s),
+    /* An unpriced ring is the thinnest the scale ever gets, so it never reads
+       as a dear bus by weight while reading as an unknown one by dash. */
+    priceRingNone: px(2, s),
+    /* The slack ring sits clear of the price ring at its heaviest: the price
+       ring reaches r + 3.5 = 20.5, so 26 leaves 5.5 units of surface between
+       them and the two do not read as one thick mark. */
+    ring: px(26, s),
     busText: rem(1.05, s), // --type-title
     wireText: rem(0.875, s), // --type-annot
     wire: px(1.6, s),
     halo: px(3.5, s),
     ringStroke: px(1, s),
-    lift: px(27, s), // how far a bus label sits off its disc
-    liftOverGens: px(60, s), // ... and how far when it must clear its units
     parallel: px(16, s), // how far apart n parallel branches bow
     /* W2.5. The transparent shapes that make a 14-unit disc and a 1.6-unit
        line comfortable to click. Pointer comfort only -- they carry no
        meaning, and nothing reads them but the hit test. */
-    hitDisc: px(26, s),
+    hitDisc: px(30, s),
     hitWire: px(12, s),
     /* W2.5. Generator marks, placed along the direction the label already
        computed as empty ground and spread across it. */
@@ -294,21 +302,33 @@ export function renderNetwork(svg, state) {
 
   const discs = node("g", { class: "buses" });
   const units = node("g", { class: "units" });
-  state.buses.forEach((bus, i) => {
-    const hue = hueFor(i);
+  state.buses.forEach((bus) => {
     const gens = generatorsAt(state.fleet, bus.name);
     const dir = labelDirection(bus, state.branches, at);
+    const lmp = lmpAt(bus.name);
+    const ink = lmp === null ? NO_PRICE : priceInk(lmp, domain);
+    const weight =
+      lmp === null
+        ? size.priceRingNone
+        : size.priceRingMin + size.priceRingSpan * priceAt(lmp, domain);
+
+    const about =
+      `Bus ${bus.name}` +
+      (lmp === null ? ", not priced yet" : `, LMP $${lmp.toFixed(4)}/MWh`) +
+      (bus.name === state.slack ? ", the slack" : "") +
+      (gens.length ? `, ${gens.length} generator(s)` : ", no generator");
 
     const g = node("g", {
       class: "bus",
       "data-bus": bus.name,
       tabindex: "0",
       role: "button",
-      "aria-label":
-        `Bus ${bus.name}` +
-        (bus.name === state.slack ? ", the slack" : "") +
-        (gens.length ? `, ${gens.length} generator(s)` : ", no generator"),
+      "aria-label": about,
     });
+    /* Hover carries four decimals where the ring carries a shade. A tooltip
+       may hold precision the figure does not; it may not hold an argument
+       the figure needed to make itself (CLAUDE.md, Interactive register). */
+    g.append(node("title", {}, about));
     g.append(node("circle", { cx: bus.x, cy: bus.y, r: size.hitDisc, class: "hit" }));
     if (bus.name === state.slack) {
       // The slack is an accounting origin and no price depends on it
@@ -323,27 +343,29 @@ export function renderNetwork(svg, state) {
         }),
       );
     }
+    /* The ring is the price and the fill is the surface, so the name inside
+       reads against paper rather than against a shade that moves. A price
+       with no answer yet is dashed: a pale ring is the cheap end of the ramp
+       and would assert a price of zero. */
     g.append(
       node("circle", {
         cx: bus.x,
         cy: bus.y,
         r: size.disc,
-        fill: hue,
-        "stroke-width": size.halo / 3,
-        class: "disc",
+        stroke: ink,
+        "stroke-width": weight,
+        class: lmp === null ? "disc disc-unpriced" : "disc",
+        "stroke-dasharray": lmp === null ? size.priceRingNone * 2 : "none",
       }),
     );
-    const lift = gens.length ? size.liftOverGens : size.lift;
     g.append(
       node(
         "text",
         {
-          x: bus.x + dir.x * lift,
-          y: bus.y + dir.y * lift,
+          x: bus.x,
+          y: bus.y,
           class: "bus-label",
           "font-size": size.busText,
-          "stroke-width": size.halo,
-          ...anchorFor(dir),
         },
         bus.name,
       ),
@@ -400,7 +422,6 @@ export function renderNetwork(svg, state) {
           y: cy - size.genSide / 2,
           width: size.genSide,
           height: size.genSide,
-          stroke: hue,
           "stroke-width": size.ringStroke * 1.4,
           class: "unit-mark",
         }),
@@ -409,6 +430,10 @@ export function renderNetwork(svg, state) {
     });
   });
 
+  /* The buses go stale with the prices they carry; the wires do not. A
+     refused solve leaves the topology exactly as the editor declares it --
+     it is the answer that is out of date, not the picture of the network. */
+  discs.setAttribute("data-results", "");
   svg.append(wires, labels, discs, units);
 }
 
@@ -452,9 +477,16 @@ function table(head, rows) {
 
 /* LMP per bus, for one hour. Read straight off cleared.lmp, which is one
    array per bus aligned to cleared.hours -- index, do not search. */
+/* The same scale as the map, from the same function, so a bus that is dark on
+   one is dark on the other. The swatch is the only thing tying the two views
+   together now that a bus has no identity colour. */
 export function renderPrices(el, cleared, hour, order) {
-  const rows = order.map((name, i) => [
-    { text: name, swatch: hueFor(i) },
+  const domain = priceDomain(cleared);
+  const rows = order.map((name) => [
+    {
+      text: name,
+      swatch: cleared.lmp[name] ? priceInk(cleared.lmp[name][hour], domain) : NO_PRICE,
+    },
     cleared.lmp[name] ? usd(cleared.lmp[name][hour]) : "—",
   ]);
   el.replaceChildren(table(["Bus", "LMP ($/MWh)"], rows));
@@ -494,4 +526,49 @@ export function markStale(on) {
     if (on) panel.dataset.stale = "true";
     else delete panel.dataset.stale;
   }
+}
+
+/* The legend. Mandatory from W3.2, because colour on the map stopped meaning
+ * identity and an unlabelled ramp is a picture of a number the reader cannot
+ * read off.
+ *
+ * It prints its own domain. The scale is fixed across the day, so moving the
+ * hour never moves these numbers -- but a new solve is a different market and
+ * can leave the old domain entirely, and when it does, the bounds change on
+ * screen where a visitor can see that they changed. A legend that silently
+ * rescaled would make a dragged limit look like a price change.
+ */
+export function renderLegend(el, cleared) {
+  const domain = cleared ? priceDomain(cleared) : null;
+  el.replaceChildren();
+
+  const ramp = document.createElement("div");
+  ramp.className = "ramp";
+  ramp.style.background = rampCss();
+  el.append(ramp);
+
+  const ends = document.createElement("p");
+  ends.className = "ramp-ends";
+  const lo = document.createElement("span");
+  const hi = document.createElement("span");
+  if (domain) {
+    lo.textContent = `$${usd(domain.lo)}`;
+    hi.textContent = `$${usd(domain.hi)}`;
+  } else {
+    lo.textContent = "—";
+    hi.textContent = "—";
+  }
+  ends.append(lo, hi);
+  el.append(ends);
+
+  const note = document.createElement("p");
+  note.className = "ramp-note";
+  note.textContent = domain
+    ? "Bus ring: LMP ($/MWh), carried twice — darker and thicker is dearer. " +
+      "The domain is every bus over all 24 hours of this solve, and the hour " +
+      "does not rescale it. A thin dashed ring is a bus this solve did not " +
+      "price."
+    : "Bus ring: LMP ($/MWh), darker and thicker is dearer. No solve has " +
+      "landed yet.";
+  el.append(note);
 }

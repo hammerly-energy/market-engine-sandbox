@@ -45,9 +45,9 @@ import { describe, summarize } from "./errors.js";
 import { mountGrammar } from "./grammar.js";
 import { checkBounds, fetchSeed, stateFromSeed } from "./state.js";
 import {
-  hueFor,
   markStale,
   renderIslands,
+  renderLegend,
   renderNetwork,
   renderPrices,
 } from "./render.js";
@@ -108,6 +108,12 @@ function paint() {
   refreshReadouts();
   if (!cleared) return;
   const hour = Math.min(editor.hour, cleared.hours.length - 1);
+
+  /* W3.2 put prices on the map, so the hour redraws it. It still does not
+     re-solve: the hour indexes a day already in the browser, and the ring
+     colours come out of the same arrays the table below reads. */
+  draw();
+  renderLegend(document.querySelector("#legend"), cleared);
 
   renderPrices(
     document.querySelector("#prices"),
@@ -206,8 +212,13 @@ async function submit() {
  * A scenario lever redraws the map immediately and posts; the map must not
  * wait a round trip or the editor lags the hand. A view lever paints. That is
  * the entire difference between the two handlers. */
+/* The map is drawn from editor state and priced from the last answer. Those
+   are two different clocks on purpose: a drag redraws at once, because a map
+   that waited a round trip would lag the hand, while the prices on it are
+   whatever the last solve said and go visibly stale when one is refused. */
 function draw() {
-  renderNetwork(document.querySelector("#network"), editor);
+  const hour = cleared ? Math.min(editor.hour, cleared.hours.length - 1) : 0;
+  renderNetwork(document.querySelector("#network"), editor, cleared, hour);
 }
 
 function onEdit() {
@@ -231,11 +242,7 @@ const history = createHistory(editor);
 
 function rebuild() {
   draw();
-  mountLevers(document.querySelector("#levers"), editor, {
-    onEdit,
-    onHour,
-    hueFor,
-  });
+  mountLevers(document.querySelector("#levers"), editor, { onEdit, onHour });
   refreshReadouts();
 }
 

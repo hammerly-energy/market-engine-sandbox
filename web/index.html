@@ -35,19 +35,14 @@
              aria-label="The network: buses, the branches between them, and the
                          generators at each bus. Tab to a mark and press Enter
                          to apply the armed mode."></svg>
+        <div class="legend" id="legend" data-results></div>
         <p class="caption" id="network-caption">
-          Buses, branches and generators as the editor declares them. Colour is
-          identity, not price — it matches the figures in <code>src/viz/</code>.
-          The ringed bus is the slack, which is an accounting origin: no LMP,
-          dispatch, flow or settlement figure depends on which bus it is. A
-          square is a generator; its bus, capacity and offer are on hover and on
-          focus, because five more names would collide at this scale.
-        </p>
-        <p class="caption">
-          Drag a bus to move it — coordinates are editor state and never cross
-          the wire. Every other edit is armed first: press a button above, then
-          click the target. Esc disarms. Nothing asks for confirmation, because
-          undo is what makes removing something safe to try.
+          A bus is a disc with its name inside it; the ring around it is its
+          LMP. The outer ring marks the slack, which is an accounting origin —
+          no LMP, dispatch, flow or settlement figure depends on which bus it
+          is, only the level of λ. A square is a generator; its bus, capacity
+          and offer are on hover and on focus, because five more names would
+          collide at this scale.
         </p>
       </section>
 

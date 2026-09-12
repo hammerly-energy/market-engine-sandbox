@@ -95,7 +95,6 @@ function slider({
   value,
   format,
   onInput,
-  swatch = null,
   kind = "edit",
   ticks = null,
   lead = null,
@@ -106,12 +105,10 @@ function slider({
      hour uses it, to seat its transport where the label would otherwise
      repeat the legend directly above it. The input keeps its aria-label
      either way, so the control is still named without the <label>. */
+  /* W3.2 took the identity dot off these rows. It coloured a lever by its
+     bus, and a bus no longer has a colour of its own -- the ring on the map
+     is its price. Every row already names its bus in the label. */
   const label = el(lead ? "span" : "label", { class: "lever-name" });
-  if (swatch) {
-    const dot = el("span", { class: "swatch" });
-    dot.style.background = swatch;
-    label.append(dot);
-  }
   if (lead) label.append(lead);
   else label.append(document.createTextNode(name));
 
@@ -265,7 +262,7 @@ const limitText = (pos) => (pos >= LIMIT_INF_POS ? "∞" : mw(pos));
  * nothing here reaches into another lever's value, so the sync exists for
  * undo (W2.7) and for the structural edits of W2.5, which rebuild instead.
  */
-export function mountLevers(root, state, { onEdit, onHour, hueFor }) {
+export function mountLevers(root, state, { onEdit, onHour }) {
   root.replaceChildren();
   stopTransport();
   const syncs = [];
@@ -401,7 +398,6 @@ export function mountLevers(root, state, { onEdit, onHour, hueFor }) {
   root.append(lines);
 
   /* ---- generators: capacity and offer, two levers on one unit. */
-  const busIndex = new Map(state.buses.map((b, i) => [b.name, i]));
   const fleet = group(
     "Generators",
     "Capacity and the offer each unit is dispatched against. Offers are " +
@@ -409,7 +405,6 @@ export function mountLevers(root, state, { onEdit, onHour, hueFor }) {
       "level between zero and its capacity.",
   );
   for (const [name, gen] of Object.entries(state.fleet)) {
-    const hue = hueFor(busIndex.get(gen.bus) ?? -1);
     const cap = slider({
       name: `${name} (${gen.bus}) capacity`,
       min: 0,
@@ -417,7 +412,6 @@ export function mountLevers(root, state, { onEdit, onHour, hueFor }) {
       step: PMAX_STEP_MW,
       value: Math.min(gen.pmax_mw, PMAX_MAX_MW),
       format: mw,
-      swatch: hue,
       onInput: (v) => {
         gen.pmax_mw = v;
         onEdit();
@@ -430,7 +424,6 @@ export function mountLevers(root, state, { onEdit, onHour, hueFor }) {
       step: COST_STEP_USD,
       value: Math.min(gen.cost_usd_per_mwh, COST_MAX_USD),
       format: usdPerMwh,
-      swatch: hue,
       onInput: (v) => {
         gen.cost_usd_per_mwh = v;
         onEdit();
@@ -465,7 +458,6 @@ export function mountLevers(root, state, { onEdit, onHour, hueFor }) {
       step: PEAK_STEP_MW,
       value: Math.min(bid.peak_mw, PEAK_MAX_MW),
       format: mw,
-      swatch: hueFor(busIndex.get(bid.bus) ?? -1),
       onInput: (v) => {
         bid.peak_mw = v;
         onEdit();

@@ -243,12 +243,20 @@ button:disabled {
   dominant-baseline: middle;
 }
 
-.bus-label { fill: var(--ink); }
+.bus-label {
+  fill: var(--ink);
+  dominant-baseline: central;
+}
 
-.disc { stroke: var(--surface); }
+/* W3.2. The fill is the surface so the name inside reads against paper, and
+   the stroke is the price. Set in render.js, which is the only place that
+   knows the scale. */
+.disc { fill: var(--surface); }
 
-/* The slack. A ring, not a fill: the slack changes nothing about the bus's
-   identity and must not read as a different bus. */
+/* The slack. An outer ring, outside the price ring and separated from it by
+   a gap, so the two rings are not read as one mark. The slack changes
+   nothing about the bus except the level of λ and must not read as a
+   different kind of bus. */
 .slack-ring {
   fill: none;
   stroke: var(--ink-2);
@@ -611,8 +619,13 @@ button.undo {
    bus's hue so it reads as belonging to one, and filled with the surface so
    a wire passing behind it does not run through it. Unlabelled by design --
    see render.js; identity is carried by focus, hover and the readout. */
+/* W3.2. A generator used to be outlined in its bus's identity hue. Buses
+   have no identity colour now, and a unit is not priced -- it is dispatched,
+   which is the Generation by Unit view's job. So it takes plain ink and says
+   only that it is there. */
 .unit-mark {
   fill: var(--surface);
+  stroke: var(--ink-2);
 }
 
 /* Focus and hover, on the marks. The keyboard path is focus-and-activate, so
@@ -754,3 +767,43 @@ button:focus-visible {
 button[aria-pressed="true"]:focus-visible {
   outline-color: var(--surface);
 }
+
+/* ------------------------------------------------- W3.2, the price legend
+   Mandatory the moment colour stops meaning identity: an unlabelled ramp is
+   a picture of a number the reader cannot read off. The bounds are printed
+   because the domain is fixed across the day but not across the session, so
+   a solve that leaves the old domain says so here. */
+
+.legend { margin-top: 0.6rem; }
+
+/* A wedge, not a bar: the ring carries the price in lightness and in width,
+   and a flat bar would key only half of that. Thin and pale at the cheap end,
+   thick and dark at the dear one, which is the mark itself unrolled.
+
+   The gradient is built in render.js from the same function that inks the
+   rings, so the key cannot drift from the marks it explains. */
+.ramp {
+  height: 0.9rem;
+  clip-path: polygon(0 38%, 100% 0, 100% 100%, 0 62%);
+}
+
+.ramp-ends {
+  display: flex;
+  justify-content: space-between;
+  margin: 0.2rem 0 0;
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.ramp-note {
+  margin: 0.35rem 0 0;
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+  max-width: 60ch;
+}
+
+/* The swatch carries the price scale now, not an identity hue, so it is an
+   encoding rather than decoration and takes an outline to hold its edge at
+   0.55em against the pale end of the ramp. */
+.swatch { box-shadow: 0 0 0 1px var(--grid); }
