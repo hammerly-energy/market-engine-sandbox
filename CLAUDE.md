@@ -426,47 +426,117 @@ screen, they hold with three amendments:
   bounces, or animates on load. A price that changes instantly is a price the
   reader cannot track to its new value.
 
-Colour is assigned by identity in a fixed order and shared between the static
-figures and the web views, so a bus is the same hue in the PDF and on screen.
+Colour is assigned by identity in a fixed order and never cycled. In
+`src/viz/` that holds for every mark, and the shared palette is why a figure
+in the PDF and a view on screen agree.
 
-### Colour on the network map: identity now, a price scale at W3
+**The network map is where the two parted, at W3.2.** A printed figure has no
+live price to carry, so it can spend colour on identity; the map has one, and
+spends it there. A bus on screen is a neutral disc with its name inside and a
+price ring around it, and a generator on the map is plain `--ink-2`, because
+a unit is dispatched rather than priced and the map is not the view that says
+so. Names carry identity on screen. A view that does encode a generator by
+hue — the merit-order stack, when it lands — takes it from the shared
+palette, in the same order.
 
-**W2.3's bus colours are a placeholder and are scheduled to change. The stage
-is W3**, whose first view is the network map with *buses coloured by LMP*.
-Today `web/js/render.js` fills each disc with its Okabe-Ito identity hue,
-which proves a bus is the same object it is in `src/viz/`, and says nothing
-about its price. That is correct for a minimal render and wrong for a
-finished map.
+### Colour on the network map: settled at W3.2
 
-The change is not a swap of one palette for another, because **one mark
-cannot carry both channels**, and identity is not disposable — it is what
-makes a bus recognisable across the merit-order stack, the flow chart and the
-24-hour heatmap sitting next to it. Three questions fall out, and they are
-scoped to the top of W3, not to the middle of it:
+**A bus is a neutral disc with its name inside it, and the ring around it is
+its LMP.** There is no bus identity colour anywhere on the page any more —
+not on the map, not on the price table's swatch, not on the lever rows.
 
-- **Which channel gets the fill.** Either the disc fill becomes the price and
-  identity retreats to the ring, the label, or the disc's outline — or the
-  fill stays identity and price is carried by a second encoding entirely.
-  Whichever way it goes, the map must not be the one view where a bus is a
-  different colour from every other view.
-- **Sequential or diverging, and of what.** LMP *level* is sequential, one hue
-  light-to-dark — except that prices go negative, and a sequential ramp
-  through zero hides the sign change that is the most interesting thing on the
-  screen. The *congestion component* `LMP − λ` is natively diverging about
-  zero, two hues with a neutral midpoint, and it is already its own W3 view.
-  Colouring the map by the level and the split view by the component is one
-  defensible answer; so is colouring both by the component. Pick one and say
-  why.
-- **What the domain is fixed to, which is the trap.** A scale rescaled per
-  hour or per solve makes the colour move when only the scale moved, and a
-  visitor dragging a limit will read that as a price change. It is the same
-  failure as a UI that animates prices sliding when the slack changes (trap
-  2), arriving through the legend instead. A domain fixed across the day —
-  or across the session, with the bounds printed — is what keeps the colour
-  comparable to the colour a second ago.
+That reverses what this section said while the question was open. The old
+text held that identity "is not disposable" because it makes a bus
+recognisable across the views sitting next to it. What it missed is that a
+bus already carries its name, and a name is the stronger identifier; the hue
+was a second channel spent on a question the reader was not asking. Spending
+it on price instead is what a map of prices is for.
 
-A legend is mandatory the moment colour stops meaning identity: an
-unlabelled ramp is a picture of a number the reader cannot read off.
+**The ring takes no hue at all, and that is a measurement rather than a
+taste.** The line ramp runs blue to vermillion. Under deuteranopia every warm
+hue collapses toward that vermillion and every cool hue toward that blue, so
+there is no third hue free on this map. The channels therefore split by mark:
+
+```
+    lines   carry hue         and carry direction with it
+    buses   carry lightness   and carry level with it
+```
+
+Nothing collides under any colour vision, and the map is literally rather
+than approximately grayscale-safe, which is what the print register asks for.
+
+**The ramp, measured against `--surface #fcfcfb`:**
+
+```
+    cheap   #919191   3.07:1      every stop clears the 3:1 a non-text
+            #7d7d7d   4.01:1      mark is held to, so "every state is
+            #6a6a6a   5.27:1      visible" is measured and not hoped
+            #575757   7.04:1
+            #454545   9.34:1
+    dear    #242424  15.12:1
+```
+
+Interpolated in CIE L\*, 60 down to 14, not in sRGB — the sRGB midpoint of
+those two greys sits four L\* units light of centre. The lightest stop is
+close to the wire grey `#8a8880` that paints an idle line at 3.46:1. They are
+a thick ring and a thin line and never touch, but it is the one place on the
+map where two scales come near each other.
+
+**The price is carried twice, in lightness and in width** — 2.5 to 7 user
+units of stroke. Redundant on purpose: a double encoding survives a grayscale
+print, a cheap monitor and every colour vision type, and the two channels
+cannot drift apart because both read the same position on the domain. Width
+also gives the eye an edge-to-edge comparison that lightness alone does not.
+
+**The domain is fixed across the day and printed.** Across the day, because a
+scale that rescaled when the hour moved would make the colour change when
+only the scale changed, and a visitor scrubbing the day would read that as a
+price change. Not across the session: a new solve is a different market whose
+prices can leave the old domain entirely, and clamping them would hide the
+most interesting thing a lever can do. The bounds are printed instead, so a
+domain that moved is visible as a domain that moved.
+
+A legend is mandatory the moment colour stops meaning identity, because an
+unlabelled ramp is a picture of a number the reader cannot read off. It is
+drawn as a **wedge** — thin and pale at the cheap end, thick and dark at the
+dear one — since a flat bar would key only half the encoding. Its gradient is
+built from the same function that inks the rings, so the key cannot drift
+from the marks it explains.
+
+Three smaller decisions that fell out:
+
+- **Unpriced is thin and dashed, never pale.** A pale ring is the cheap end
+  of the ramp and would assert a price of zero for a bus that is one round
+  trip old.
+- **The buses go stale, the wires do not.** The disc group carries
+  `data-results`, so a refused solve dims the prices and leaves the topology
+  at full strength. It is the answer that is out of date, not the picture of
+  the network.
+- **The slack ring sits at r = 26.** The price ring reaches r + 3.5 = 20.5 at
+  its heaviest, and at 24 the two read as one thick mark on bus D.
+
+#### What this fixes for the line ramp at W3.6
+
+Two things about the line scale were settled here and are recorded so W3.6
+does not re-decide them.
+
+The ramp's neutral is `#8a8880`, **not** the `#f0efea` it was first drawn
+with: `#f0efea` on `#fcfcfb` is **1.12:1**, so an idle line painted the
+midpoint would be invisible. Diverging ramps assume a mid-lightness ground
+and this page has none. `#8a8880` is already what an idle line is painted, so
+nothing changes on screen until the ramp lands.
+
+And the variable is **`f / limit`, signed, on `[−1, 1]`** — not percent of
+rating. Percent of rating runs 0 to 100 and is natively sequential; a
+diverging ramp needs a signed quantity, and the signed one carries direction
+and loading in a single number. Blue and vermillion are then the two flow
+directions, neutral is an idle line, and **70% is a saturation threshold, not
+the midpoint** — the legend has to say that in those words, or a reader takes
+the hue for magnitude. An unrated line is `f / ∞ = 0` and paints neutral
+forever, which is correct and also belongs on the legend.
+
+`f / limit` is arithmetic, so `clear()` returns it and the browser does not
+compute it — the same rule, and the same reason, as `headroom`.
 
 ### What the engine already refuses
 
@@ -924,7 +994,7 @@ of 10*.
 | **W2.0** ✓ | Serve the page | 0.5 d | `web/` skeleton, plain ES modules, no toolchain. `StaticFiles` mounted at `/` **registered last**, or the mount shadows `/clear` and the failure looks like a frontend bug for an afternoon |
 | **W2.1** | Editor state | 1 d | The single source of truth the eight levers mutate; nothing else in the frontend holds state. `{buses: [{name, x, y}], branches, fleet, bids, shape, slack, hour, limits}`. **Coordinates are editor state and never cross the wire.** `toConfig()` emits w1.yaml's exact dict and **always `load.source: blocks`**. The **defaults policy** is written down, because a default is a market assumption wearing a UI detail's clothes. Client-side bound check against `/limits`, refusing before it posts — a courtesy, not the defence |
 | **W2.2** | Transport | 0.5 d | `postClear(state)`, and **request coalescing**: a monotonic id per request, stale responses dropped. A drag fires many solves and they return out of order, so the last response is not the last request. This is *not* debouncing the price — the flicker at a degenerate breakpoint is kept and shown (trap 3). Error surface switches on the stable code and prints `detail` verbatim |
-| **W2.3** | Minimal render | 1 d | Enough feedback to prove a lever worked, and no more: hand-written SVG buses and branches, a readout of LMP per bus, λ per island, and the settlement residual. Formatted only. Bus colour is **identity, and a placeholder for W3's price scale** — see *Colour on the network map*. **The seven views are W3 — do not build them here** |
+| **W2.3** | Minimal render | 1 d | Enough feedback to prove a lever worked, and no more: hand-written SVG buses and branches, a readout of LMP per bus, λ per island, and the settlement residual. Formatted only. Bus colour was identity here and was replaced at W3.2 by the price ring — see *Colour on the network map*. **The seven views are W3 — do not build them here** |
 | **W2.4** | The five non-drag levers | 1 d | Line limit → the `limits` override, which is an argument to `clear()` and not a config edit. Peak load per bus, generator capacity, marginal cost. Hour 1–24 indexes the returned arrays and does **not** re-solve; the day comes back whole |
 | **W2.5** | The editing grammar | 2.5 d | Add/remove bus, connect/cut line, add/remove generator. Drag a bus body to move it; every structural edit is an **armed mode** — press a button, then click the target. Hit-testing by hand in SVG. **This is where the plan overruns.** Checkpoint at the end of its second day: if drag is still fighting you, adopt a framework for the editor alone. That retreat is correct on day 2 and worthless on day 9. Three things ride along because they are the same hit-testing and the same state: the **armed-state readout**, the **keyboard path** (focus and activate, never a shortcut), and **undo**, pulled forward from W2.7 — see *W2 decision: the editing grammar* |
 | **W2.6** | The slack lever | 0.5 d | A dropdown over the bus list, posted explicitly on every request. **Deleting the slack bus moves the dropdown; it does not 422.** The editor owns keeping slack in step with its bus list, and the engine's refusal of a non-bus slack is the check that catches it failing to |
