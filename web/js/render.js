@@ -33,7 +33,7 @@
  */
 
 import { generatorsAt } from "./edits.js";
-import { NO_PRICE, priceAt, priceDomain, priceInk, rampCss } from "./scales.js";
+import { genInk, NO_PRICE, priceAt, priceDomain, priceInk, rampCss } from "./scales.js";
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -195,6 +195,14 @@ export function renderNetwork(svg, state, cleared = null, hour = 0) {
   figurePx = svg.clientWidth || 496;
   const at = new Map(state.buses.map((b) => [b.name, b]));
   const offsets = bow(state.branches);
+  /* The map colours a unit from EDITOR order and the merit-order stack from
+     the order the last solve returned. They are the same list -- toConfig()
+     emits the fleet in this order and the engine keeps it -- except in the
+     round trip after a unit is added or removed, where the map is already
+     right and the stack is one answer behind. The stale marking says so; a
+     hue that waited for the solve would leave a new unit uncoloured on a map
+     that is otherwise drawn immediately. */
+  const fleetOrder = Object.keys(state.fleet);
 
   const box = viewBox(state.buses);
   svg.setAttribute("viewBox", `${box.x} ${box.y} ${box.w} ${box.h}`);
@@ -385,8 +393,13 @@ export function renderNetwork(svg, state, cleared = null, hour = 0) {
      * or cutting content, never by shrinking it. So identity is carried by
      * focus and hover -- the title element below is the native tooltip, the
      * aria-label is the same sentence for a screen reader, and the armed
-     * readout names what is under the pointer. A generator gets a printed
-     * name in W3's merit-order stack, which is a view with room for one.
+     * readout names what is under the pointer.
+     *
+     * And by hue, from W3.4. The square takes the unit's colour in the
+     * merit-order stack, which is the one view that prints its name, so the
+     * block a reader has just read can be found on the map without a label
+     * the map has no room for. That reverses W3.2, which left the square
+     * plain ink because no view coloured a unit yet.
      *
      * Placed along `dir`, which labelDirection already computed as the empty
      * ground around this bus, and spread across it so n units read as n.
@@ -422,7 +435,19 @@ export function renderNetwork(svg, state, cleared = null, hour = 0) {
           y: cy - size.genSide / 2,
           width: size.genSide,
           height: size.genSide,
-          "stroke-width": size.ringStroke * 1.4,
+          "stroke-width": size.ringStroke * 1.8,
+          /* The hue fills the square and --ink-2 keeps the edge. Outlining in
+             the hue instead was measured and dropped: --hue-4 #56b4e9 on
+             --surface #fcfcfb is 2.2:1 and --hue-1 #e69f00 is 2.1:1, both
+             under the 3:1 a non-text mark is held to, and a 1.8-unit outline
+             is all edge. Filled, the dark edge carries the shape at 7.73:1
+             and the hue only has to be told from four others.
+
+             A style, not a fill attribute. A presentation attribute loses to
+             any stylesheet declaration, and .unit-mark sets fill and stroke
+             -- the attribute form painted every square surface-white and
+             looked like the palette was wrong. */
+          style: `fill: ${genInk(fleetOrder, name)}`,
           class: "unit-mark",
         }),
       );

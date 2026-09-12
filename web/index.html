@@ -82,10 +82,24 @@
            any of them is coded, which is the order the retrofit is expensive
            in. Five when they were written; the split landed in the price
            panel rather than beside it, so the frame carries ten. -->
-      <section class="panel" data-results data-slot>
+      <section class="panel" data-results>
         <h2>Merit Order</h2>
-        <p class="note">Not built yet. Offers stacked against served demand.</p>
+        <p class="note">
+          Offers cheapest first, each block as wide as its capacity and as
+          tall as its cost. The solid part ran. The dashed staircase is
+          demand, and λ is the rule across it.
+        </p>
         <div id="merit"></div>
+        <p class="caption">
+          A cheap block left empty beside a dearer one that is full is
+          congestion: the line that would carry those MW is at its limit, so
+          the stack is not dispatched in its own order. That is also why the
+          intersection here is not the price at any particular bus — with a
+          line binding there is no single marginal unit, and the LMP panel
+          above is where the prices are. Firm bids are valued at the offer
+          cap, far above every offer, so they are drawn at the ceiling rather
+          than to scale.
+        </p>
       </section>
 
       <section class="panel" data-results data-slot>

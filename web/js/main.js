@@ -43,6 +43,7 @@ import { mountLevers } from "./controls.js";
 import { createHistory } from "./edits.js";
 import { describe, summarize } from "./errors.js";
 import { mountGrammar } from "./grammar.js";
+import { renderMerit } from "./merit.js";
 import { checkBounds, fetchSeed, stateFromSeed } from "./state.js";
 import {
   markStale,
@@ -121,6 +122,7 @@ function paint() {
     hour,
     editor.buses.map((bus) => bus.name),
   );
+  renderMerit(document.querySelector("#merit"), cleared, hour);
   renderIslands(document.querySelector("#islands"), cleared, hour);
 
   document.querySelector("#hour-note").textContent =

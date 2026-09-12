@@ -610,10 +610,24 @@ button.undo {
    bus's hue so it reads as belonging to one, and filled with the surface so
    a wire passing behind it does not run through it. Unlabelled by design --
    see render.js; identity is carried by focus, hover and the readout. */
-/* W3.2. A generator used to be outlined in its bus's identity hue. Buses
-   have no identity colour now, and a unit is not priced -- it is dispatched,
-   which is the Generation by Unit view's job. So it takes plain ink and says
-   only that it is there. */
+/* W3.2 took the bus's identity hue off the square, because buses stopped
+   having one. W3.4 gives it the UNIT's hue, which is a different claim: it
+   is the colour of that generator's block in the merit-order stack, and it
+   is what lets a reader carry `brighton` from the named block to the
+   unlabelled square. render.js fills each square with that hue, as an inline
+   style -- a presentation attribute would lose to the declarations below.
+   The hue is the fill and not the outline, which is a contrast measurement
+   and not a taste: see render.js. The surface fill here is what a square is
+   before a hue reaches it, and it is also why a wire passing behind one does
+   not run through it.
+
+   Re-check this at W3.6. Lines are grey today and will carry the blue-to-
+   vermillion flow ramp, and under deuteranopia every warm hue collapses
+   toward that vermillion and every cool one toward that blue -- the
+   measurement that put lightness rather than hue on the bus rings. What
+   keeps the square legible there is that it is a square: hue on this map is
+   now split by mark shape, not by scale, so a blue square and a blue line
+   are told apart by their outline before their colour. */
 .unit-mark {
   fill: var(--surface);
   stroke: var(--ink-2);
@@ -900,3 +914,78 @@ button[aria-pressed="true"]:focus-visible {
   color: var(--ink-2);
   text-align: center;
 }
+
+/* ------------------------------------------------- W3.4, the merit order
+   The figure is SVG and carries its own type sizes in user units, because a
+   viewBox unit is near enough a pixel at this panel's width. What lives here
+   is the ink and the dash, so the marks match the rest of the page. */
+
+.merit { width: 100%; height: auto; display: block; }
+
+.merit-plot + .merit-plot { margin-top: 1rem; }
+
+/* One island's name, when there is more than one. Same role and same ink as
+   the split panel's group heading. */
+.merit-head {
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+  margin: 0 0 0.2rem;
+}
+
+.merit-axes line { stroke: var(--grid); stroke-width: 1; }
+
+/* Tick and axis name are read against the axis, so they are sentence case and
+   recessive -- --ink-wire, 5.28:1, not --ink-muted's 3.46 (W2.7). */
+.merit-tick,
+.merit-axis-name,
+.merit-annot { fill: var(--ink-wire); }
+
+.merit-name { fill: var(--ink-2); }
+
+/* 0.8 rather than opaque: the bbox is there to lift text off a fill, not to
+   punch a hole in the figure, and the mark under it stays legible as a mark.
+   Same device and same reason as the print register's
+   bbox=dict(facecolor=SURFACE, alpha=0.75). */
+.merit-bbox { fill: var(--surface); opacity: 0.8; }
+
+/* Every label on this figure sits over something -- a block edge, the demand
+   curve, the λ rule -- so each carries a surface-coloured halo and is painted
+   over it. A line struck through a label is a silent failure, and the same
+   halo is what the map's branch names use. */
+.merit-name {
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3.5;
+  stroke-linejoin: round;
+}
+
+/* The demand staircase. Ink rather than a hue: the two diverging hues on this
+   page belong to the line ramp, and demand is one curve that needs no
+   identity of its own.
+
+   Solid, and the dash is left to λ. Both were dashed when this first
+   rendered and the two could not be told apart where they crossed, which
+   matters because they are different kinds of thing: one is the bids, the
+   other is the answer. λ's dash is the one the LMP panel already draws it
+   with, so the pair reads as one statement across two panels. */
+.merit-demand {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.6;
+}
+
+/* λ, the same dashed rule the LMP panel draws it as, so the two panels read
+   as one statement. `over` is λ clamped to the ceiling: dotted, because the
+   rule is then at a position the axis does not mean. */
+.merit-lambda-rule {
+  stroke: var(--ink);
+  stroke-width: 1.4;
+  stroke-dasharray: 5 3;
+}
+
+.merit-lambda-rule.over { stroke-dasharray: 2 3; }
+
+/* MW the market declined to serve. The one mark on this figure that is not
+   about supply, so it sits on the axis and takes the warm end of the flow
+   ramp -- the only place a hue means "refused" on this page. */
+.merit-curtail { fill: var(--flow-pos); }

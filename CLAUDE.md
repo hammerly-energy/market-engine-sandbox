@@ -433,11 +433,29 @@ in the PDF and a view on screen agree.
 **The network map is where the two parted, at W3.2.** A printed figure has no
 live price to carry, so it can spend colour on identity; the map has one, and
 spends it there. A bus on screen is a neutral disc with its name inside and a
-price ring around it, and a generator on the map is plain `--ink-2`, because
-a unit is dispatched rather than priced and the map is not the view that says
-so. Names carry identity on screen. A view that does encode a generator by
-hue — the merit-order stack, when it lands — takes it from the shared
+price ring around it. Names carry identity on screen. A view that does encode
+a generator by hue — the merit-order stack — takes it from the shared
 palette, in the same order.
+
+**The generator square is the exception, from W3.4, and it is a reversal.**
+W3.2 left the square plain `--ink-2` on the grounds that a unit is dispatched
+rather than priced. That was correct while no view coloured a unit. The merit
+stack does, and it is the one view that prints a generator's name, so the
+square takes that unit's hue and a reader can carry `brighton` from the named
+block to a mark the map has no room to label. `genInk()` in `web/js/scales.js`
+is the single definition both views read.
+
+The hue fills the square and `--ink-2` keeps the edge. Outlining in the hue
+was measured and dropped: `--hue-4` `#56b4e9` on `--surface` is **2.2:1** and
+`--hue-1` `#e69f00` is **2.1:1**, both under the 3:1 a non-text mark is held
+to, and a thin outline is all edge. Filled, the shape is carried at 7.73:1 by
+the edge and the hue only has to be told from four others.
+
+Two things this does not reopen. The bus ring still carries no hue, for the
+deuteranopia measurement below. And the square survives W3.6's line ramp
+because **hue on this map is now split by mark shape, not by scale** — a blue
+square and a blue wire are told apart by their outline before their colour.
+Re-check it against the rendered ramp rather than trusting that sentence.
 
 ### Colour on the network map: settled at W3.2
 

@@ -102,3 +102,30 @@ export function rampCss(steps = 9) {
   }
   return `linear-gradient(to right, ${stops.join(", ")})`;
 }
+
+/* ------------------------------------------------ the generator palette
+ *
+ * Identity, in fleet order, never cycled. Okabe-Ito, the same five hues and
+ * the same order src/viz/ assigns, so a unit in a print figure and a unit on
+ * screen are the same colour.
+ *
+ * It lives here rather than in either view because two views read it: the
+ * merit-order stack colours its blocks, and the map colours the square. A
+ * second copy would be a second palette, and it would drift.
+ *
+ * Fleet order is a position, so removing a unit recolours the units after
+ * it. Measured: delete park_city, solitude and sundance and brighton goes
+ * from --hue-4 to --hue-1. The alternatives are worse. Merit position moves
+ * under the cost slider, which is a far more frequent act than deleting a
+ * unit, and a hash of the name onto five hues collides -- two units the same
+ * colour is a stronger false claim than one unit changing colour in the same
+ * edit that removed its neighbour.
+ *
+ * The palette holds five. A sixth generator takes the neutral ink rather
+ * than reusing a hue, because a repeated hue would assert two units are the
+ * same unit.
+ */
+export function genInk(order, name) {
+  const i = order.indexOf(name);
+  return i >= 0 && i < 5 ? `var(--hue-${i})` : "var(--ink-2)";
+}
