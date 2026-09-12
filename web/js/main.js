@@ -49,7 +49,7 @@ import {
   renderIslands,
   renderLegend,
   renderNetwork,
-  renderPrices,
+  renderSplit,
 } from "./render.js";
 
 const status = document.querySelector("#status");
@@ -115,8 +115,8 @@ function paint() {
   draw();
   renderLegend(document.querySelector("#legend"), cleared);
 
-  renderPrices(
-    document.querySelector("#prices"),
+  renderSplit(
+    document.querySelector("#split"),
     cleared,
     hour,
     editor.buses.map((bus) => bus.name),
@@ -124,8 +124,8 @@ function paint() {
   renderIslands(document.querySelector("#islands"), cleared, hour);
 
   document.querySelector("#hour-note").textContent =
-    `Hour ${hour + 1} of ${cleared.hours.length}, from the day the last solve ` +
-    `returned. Moving the hour does not re-solve.`;
+    `Hour ${hour + 1} of ${cleared.hours.length}. Moving the hour does not ` +
+    `re-solve — the whole day came back with the last answer.`;
 }
 
 /* The three panels that describe the editor rather than the market: what it

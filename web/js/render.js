@@ -455,17 +455,7 @@ function table(head, rows) {
     const tr = document.createElement("tr");
     row.forEach((cell, i) => {
       const td = document.createElement("td");
-      if (cell && typeof cell === "object") {
-        td.textContent = cell.text;
-        if (cell.swatch) {
-          const dot = document.createElement("span");
-          dot.className = "swatch";
-          dot.style.background = cell.swatch;
-          td.prepend(dot);
-        }
-      } else {
-        td.textContent = cell;
-      }
+      td.textContent = cell;
       if (i > 0) td.className = "num";
       tr.append(td);
     });
@@ -475,22 +465,10 @@ function table(head, rows) {
   return t;
 }
 
-/* LMP per bus, for one hour. Read straight off cleared.lmp, which is one
-   array per bus aligned to cleared.hours -- index, do not search. */
-/* The same scale as the map, from the same function, so a bus that is dark on
-   one is dark on the other. The swatch is the only thing tying the two views
-   together now that a bus has no identity colour. */
-export function renderPrices(el, cleared, hour, order) {
-  const domain = priceDomain(cleared);
-  const rows = order.map((name) => [
-    {
-      text: name,
-      swatch: cleared.lmp[name] ? priceInk(cleared.lmp[name][hour], domain) : NO_PRICE,
-    },
-    cleared.lmp[name] ? usd(cleared.lmp[name][hour]) : "—",
-  ]);
-  el.replaceChildren(table(["Bus", "LMP ($/MWh)"], rows));
-}
+/* W3.3 folded the LMP table into renderSplit. It was a bus name, a price
+   swatch and a number; the split row is the same three plus the bar, drawn
+   against the same domain and inked by the same function. Two panels of five
+   rows each printed the bus names and the prices twice. */
 
 /* One row per island: its lambda, its buses, and its settlement residual --
  * all three for the same hour.
@@ -571,4 +549,191 @@ export function renderLegend(el, cleared) {
     : "Bus ring: LMP ($/MWh), darker and thicker is dearer. No solve has " +
       "landed yet.";
   el.append(note);
+}
+
+/* ------------------------------------------------- W3.3, the LMP split
+ *
+ * LMP[i] = lambda + sum_l PTDF[l,i] * mu[l], drawn rather than stated. The
+ * axis is price, a dashed rule marks the island's lambda, and the bar is the
+ * congestion component running from that rule to the bus's LMP. The bar's far
+ * end is the price, so the figure reads as "start at lambda, move by
+ * congestion, arrive at the LMP".
+ *
+ * The baseline is lambda and not zero, and that was measured rather than
+ * chosen. Under w1.yaml's slack D every congestion component is <= 0:
+ *
+ *     hour 8, slack D    lambda 39.9427
+ *       A  lmp 16.9774   cong -22.9654
+ *       B  lmp 26.3845   cong -13.5583
+ *       C  lmp 30.0000   cong  -9.9427
+ *       D  lmp 39.9427   cong   0.0000
+ *       E  lmp 10.0000   cong -29.9427
+ *
+ * A bar stacked from zero would therefore have to draw the second segment
+ * backwards over the first in every row of the ordinary case. Anchored at
+ * lambda, the same rows are five bars of different length pointing the same
+ * way, and the sign is carried by which side of the rule they fall on --
+ * position, not a second colour channel, which matters because the two
+ * diverging hues on this page are spoken for by the line ramp.
+ *
+ * The sign is an artifact of the slack anyway. Slack E puts lambda at 10.00
+ * and every component goes positive, with no LMP moving (trap 2). So the two
+ * directions are equally ordinary and the figure must not treat either as the
+ * exception.
+ *
+ * Congestion is zero at the slack by construction -- PTDF[l, slack] = 0 -- so
+ * that row is a bar of no length. It gets its end cap and nothing else, which
+ * is the clearest statement of trap 2 on the page: the bus whose price IS
+ * lambda is the one the scale is drawn from.
+ *
+ * The x domain is priceDomain(), the same one the map's rings are inked from,
+ * so a bus far to the right here is dark there. Fixed across the day for the
+ * reason given in scales.js. lambda is the LMP at the slack and the slack is
+ * a bus, so lambda is always inside a domain taken over the buses.
+ *
+ * The arithmetic is the engine's. This function reads lmp, congestion and
+ * lmbda and converts them to percentages of a track, which is geometry. It
+ * never adds the first two together -- the identity is asserted by the
+ * picture lining up, which is only evidence because nothing here made it
+ * line up.
+ */
+function splitRow(name, cleared, hour, home, domain) {
+  const row = document.createElement("div");
+  row.className = "split-row";
+
+  const label = document.createElement("span");
+  label.className = "split-name";
+  label.textContent = name;
+
+  const track = document.createElement("div");
+  track.className = "split-track";
+
+  const value = document.createElement("span");
+  value.className = "split-value num";
+
+  const lmp = cleared.lmp[name];
+  const cong = cleared.congestion[name];
+
+  /* A bus the last answer does not carry: added since the solve, or gone
+     from it. Named with no bar rather than dropped, so the row count matches
+     the map and a missing price reads as missing. */
+  if (!lmp || !cong) {
+    value.textContent = "—";
+    row.append(label, track, value);
+    return row;
+  }
+
+  const lam = cleared.lmbda[home][hour];
+  const atLam = priceAt(lam, domain) * 100;
+  const atLmp = priceAt(lmp[hour], domain) * 100;
+
+  const rule = document.createElement("div");
+  rule.className = "split-rule";
+  rule.style.left = `${atLam}%`;
+
+  const bar = document.createElement("div");
+  bar.className = "split-bar";
+  bar.style.left = `${Math.min(atLam, atLmp)}%`;
+  bar.style.width = `${Math.abs(atLmp - atLam)}%`;
+
+  /* The end cap is inked from the same function as the map's rings, so the
+     bus that is darkest here is the darkest disc there. */
+  const cap = document.createElement("div");
+  cap.className = "split-cap";
+  cap.style.left = `${atLmp}%`;
+  cap.style.background = priceInk(lmp[hour], domain);
+
+  track.append(rule, bar, cap);
+
+  /* Hover carries four decimals where the figure carries two. It states the
+     identity with the three numbers the engine returned and computes none of
+     them (CLAUDE.md, Interactive figure register). */
+  row.title =
+    `${name}: λ ${lam.toFixed(4)} + congestion ${cong[hour].toFixed(4)}` +
+    ` = LMP ${lmp[hour].toFixed(4)} $/MWh`;
+
+  value.textContent = usd(lmp[hour]);
+  row.append(label, track, value);
+  return row;
+}
+
+export function renderSplit(el, cleared, hour, order) {
+  const domain = priceDomain(cleared);
+  el.replaceChildren();
+
+  if (!domain) {
+    const p = document.createElement("p");
+    p.className = "note";
+    p.textContent = "No priced bus in the last answer.";
+    el.append(p);
+    return;
+  }
+
+  /* One group per island, each with its own rule, because each island has
+     its own energy balance and its own λ. The x scale is shared across them
+     so two islands' prices are read against one axis. */
+  const many = Object.keys(cleared.lmbda).length > 1;
+  for (const home of Object.keys(cleared.lmbda)) {
+    const here = new Set(cleared.islands[home]);
+    const group = document.createElement("div");
+    group.className = "split-group";
+
+    /* A connected network is one island and naming it would be noise; a cut
+       one has several λ and the reader has to know which is which. */
+    const head = document.createElement("p");
+    head.className = "split-lambda";
+    const lam = `λ = $${usd(cleared.lmbda[home][hour])}/MWh`;
+    head.textContent = many ? `${lam} · island ${home}` : lam;
+    group.append(head);
+
+    for (const name of order.filter((n) => here.has(n))) {
+      group.append(splitRow(name, cleared, hour, home, domain));
+    }
+    el.append(group);
+  }
+
+  /* Buses the engine priced in no island -- there are none today, and there
+     would be if a solve and the editor ever disagreed about the bus list.
+     Listed rather than silently dropped. */
+  const priced = new Set(Object.keys(cleared.island_of));
+  const orphans = order.filter((n) => !priced.has(n));
+  if (orphans.length) {
+    const group = document.createElement("div");
+    group.className = "split-group";
+    const head = document.createElement("p");
+    head.className = "split-lambda";
+    head.textContent = "Not in the last answer";
+    group.append(head);
+    for (const name of orphans) {
+      const row = document.createElement("div");
+      row.className = "split-row";
+      const label = document.createElement("span");
+      label.className = "split-name";
+      label.textContent = name;
+      const track = document.createElement("div");
+      track.className = "split-track";
+      const value = document.createElement("span");
+      value.className = "split-value num";
+      value.textContent = "—";
+      row.append(label, track, value);
+      group.append(row);
+    }
+    el.append(group);
+  }
+
+  /* The axis. Two ticks and a name: the domain's ends, which are the same
+     two numbers the map's legend prints, from the same function. */
+  const axis = document.createElement("div");
+  axis.className = "split-axis";
+  const lo = document.createElement("span");
+  lo.textContent = `$${usd(domain.lo)}`;
+  const hi = document.createElement("span");
+  hi.textContent = `$${usd(domain.hi)}`;
+  axis.append(lo, hi);
+
+  const name = document.createElement("p");
+  name.className = "split-axis-name";
+  name.textContent = "LMP ($/MWh)";
+
+  el.append(axis, name);
 }

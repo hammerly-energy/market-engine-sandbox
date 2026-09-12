@@ -59,26 +59,29 @@
     </div>
 
     <main class="views">
+      <!-- One panel, not two. The price table and the split were the same
+           five rows: a bus name, its LMP, and a mark inked from the same
+           domain. The bar is what the split adds, so it is a column of the
+           price table rather than a second reading of it. -->
       <section class="panel" data-results>
-        <h2>Prices</h2>
+        <h2>Locational Marginal Price (LMP)</h2>
         <p class="note" id="hour-note">Waiting for the first solve…</p>
-        <div id="prices"></div>
+        <p class="note">
+          The dashed line is λ, the energy price, and it is the same at every
+          bus. The bar is congestion: what moves a bus away from it.
+        </p>
+        <div id="split"></div>
         <p class="caption">
-          LMP at each bus for the hour shown. Every number is a field of the
-          <code>clear()</code> return, rounded — nothing on this page is
-          computed in JavaScript.
+          Congestion is zero at the slack bus, so its price is λ. Move the
+          slack and every bar changes length while no price moves.
         </p>
       </section>
 
-      <!-- The five views still to be built, as empty slots. They are here
-           at W3.0 so the frame is verified carrying eleven panels before any
-           of them is coded, which is the order the retrofit is expensive in. -->
-      <section class="panel" data-results data-slot>
-        <h2>LMP Split</h2>
-        <p class="note">Not built yet. λ and the congestion component, per bus.</p>
-        <div id="split"></div>
-      </section>
-
+      <!-- The four views still to be built, as empty slots. They are here
+           at W3.0 so the frame is verified carrying its full height before
+           any of them is coded, which is the order the retrofit is expensive
+           in. Five when they were written; the split landed in the price
+           panel rather than beside it, so the frame carries ten. -->
       <section class="panel" data-results data-slot>
         <h2>Merit Order</h2>
         <p class="note">Not built yet. Offers stacked against served demand.</p>

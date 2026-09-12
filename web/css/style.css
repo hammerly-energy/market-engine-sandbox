@@ -300,15 +300,6 @@ th:last-child { padding-right: 0; }
 
 .num { text-align: right; }
 
-.swatch {
-  display: inline-block;
-  width: 0.55em;
-  height: 0.55em;
-  border-radius: 50%;
-  margin-right: 0.45em;
-  vertical-align: baseline;
-}
-
 /* Prices that no longer describe the network on screen. Recessive, and
    labelled -- kept rather than blanked, because an empty table is a
    different and false claim. */
@@ -803,7 +794,109 @@ button[aria-pressed="true"]:focus-visible {
   max-width: 60ch;
 }
 
-/* The swatch carries the price scale now, not an identity hue, so it is an
-   encoding rather than decoration and takes an outline to hold its edge at
-   0.55em against the pale end of the ramp. */
-.swatch { box-shadow: 0 0 0 1px var(--grid); }
+/* ---------------------------------------------------- W3.3, the LMP split
+   A price axis, a dashed rule at the island's λ, and a bar from that rule to
+   each bus's LMP. The bar is the congestion component and its side of the
+   rule is its sign, so the figure needs no second colour: the two diverging
+   hues on this page belong to the line ramp.
+
+   Built in HTML rather than SVG. At the grid's narrowest card the track is
+   about 250 px, and percentage widths reflow into that for free while the
+   labels stay real text at the page's own sizes — an SVG would scale its
+   type with the card, which is the problem render.js solves by measuring. */
+
+.split-group { margin: 0 0 0.7rem; }
+
+.split-lambda {
+  margin: 0 0 0.3rem;
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* No row gap: the dashed rule is drawn inside each track, and the tracks
+   stacking flush is what makes it read as one line down the group. */
+.split-row {
+  display: grid;
+  grid-template-columns: 1.4rem 1fr 3.6rem;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.split-name {
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+}
+
+.split-value {
+  font-size: var(--type-annot);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.split-track {
+  position: relative;
+  height: 1.15rem;
+}
+
+/* Above the bars, because every bar starts on it and would otherwise hide
+   the reference it is measured from. Below the end caps, so the slack's cap
+   sits on the rule rather than behind it — that row is the statement that λ
+   is the LMP at the slack. */
+.split-rule {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  border-left: 1px dashed var(--ink-muted);
+}
+
+.split-bar {
+  position: absolute;
+  top: 50%;
+  height: 0.3rem;
+  transform: translateY(-50%);
+  background: var(--ink-2);
+  z-index: 0;
+  /* Motion is for continuity: when the slack moves, λ slides and every bar
+     grows or shrinks to meet it while the end caps stay where they are. That
+     is trap 2 happening on screen. Nothing animates on load. */
+  transition: left 180ms ease, width 180ms ease;
+}
+
+/* The price itself, inked from the same function as the map's rings, so the
+   bus furthest right here is the darkest disc there. Outlined so it holds its
+   edge at the pale end of the ramp, where the lightest stop is 3.07:1 on the
+   surface. */
+.split-cap {
+  position: absolute;
+  top: 50%;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin: -0.25rem 0 0 -0.25rem;
+  border-radius: 50%;
+  z-index: 2;
+  box-shadow: 0 0 0 1px var(--grid);
+  transition: left 180ms ease;
+}
+
+.split-axis {
+  display: flex;
+  justify-content: space-between;
+  /* The same columns as a row, so the ticks land under the track's ends and
+     not under the name and the value. */
+  margin: 0.1rem 1.4rem 0 calc(1.4rem + 0.45rem);
+  padding-right: 0.45rem;
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  border-top: 1px solid var(--grid);
+  padding-top: 0.15rem;
+}
+
+.split-axis-name {
+  margin: 0.15rem 0 0;
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+  text-align: center;
+}
