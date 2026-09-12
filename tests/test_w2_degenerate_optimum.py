@@ -1,8 +1,9 @@
 """A degenerate optimum that is reproducible, and its control one hour away.
 
-Scoped at W2.9, which decided that clear() will carry a per-island, per-hour
-uniqueness flag. The flag is built at the top of W3; this file is the pair of
-hours it has to get right, banked first so the test exists before the code.
+Scoped at W2.9, which decided that clear() would carry a per-island, per-hour
+uniqueness flag. This file is the pair of hours it has to get right, banked
+before the code. The flag landed at W3.1 and is asserted against them at the
+bottom of this file.
 
     configs/w1.yaml, both line limits removed, hour 8
 
@@ -38,6 +39,8 @@ W1_CONFIG = "configs/w1.yaml"
 
 BREAKPOINT_HOUR = 8      # load lands exactly on 810 MW
 CONTROL_HOUR = 7         # 730 MW, park_city part-loaded
+
+TIED_HOURS = [20, 21]    # of the tied fixture below: two units interior at $25
 
 LOWER = 15.0             # park_city's offer, the left slope of the cost curve
 UPPER = 30.0             # solitude's offer, the right slope
@@ -202,3 +205,104 @@ class TestDegeneracyBreaksNoInvariant:
         assert set(prices) == {"A", "B", "C", "D", "E"}
         for slack, lmbda in prices.items():
             assert lmbda == pytest.approx(LOWER), slack
+
+
+class TestTheFlagSaysWhichHalfIsNotPinned:
+    """W3.1. clear() carries the count, and it agrees with the hours above.
+
+    Every number the flag reads is one clear() already returns, so this costs
+    no extra solve. What is asserted here is the comparison, on the two hours
+    this file was written to bank.
+    """
+
+    def test_the_breakpoint_hour_says_the_price_is_an_interval(self, cleared):
+        assert cleared["uniqueness"]["D", BREAKPOINT_HOUR]["verdict"] == (
+            "price_is_an_interval"
+        )
+
+    def test_and_reports_the_count_that_says_so(self, cleared):
+        flag = cleared["uniqueness"]["D", BREAKPOINT_HOUR]
+        assert (flag["basic"], flag["rows"]) == (0, 1)
+
+    def test_the_control_hour_is_pinned(self, cleared):
+        flag = cleared["uniqueness"]["D", CONTROL_HOUR]
+        assert flag["verdict"] == "unique"
+        assert (flag["basic"], flag["rows"]) == (1, 1)
+
+    def test_the_flag_agrees_with_the_helper_this_file_already_had(self, cleared):
+        """_counts is the same comparison written by hand at W2.9.
+
+        It is kept as an independent statement of the rule: if the engine's
+        version and this file's version ever disagree, one of them has been
+        edited without the other.
+        """
+        for hour in (CONTROL_HOUR, BREAKPOINT_HOUR):
+            basic, rows = _counts(cleared, hour)
+            flag = cleared["uniqueness"]["D", hour]
+            assert (flag["basic"], flag["rows"]) == (basic, rows)
+
+    def test_every_island_and_hour_carries_one(self, cleared):
+        keys = {(home, t) for home in cleared["islands"] for t in cleared["hours"]}
+        assert set(cleared["uniqueness"]) == keys
+
+
+class TestTheOtherDegeneracyIsADifferentSentence:
+    """basic > rows: the price is pinned and who runs is not.
+
+    The two directions do not collapse into one "degenerate" bool, and this
+    is the half that would be lost if they did. Reached by giving two units
+    the same offer with nothing congested, so a MW can move between them at
+    no cost -- the dispatch table under trap 2, in miniature.
+    """
+
+    @pytest.fixture(scope="class")
+    def tied(self, config):
+        """Three units at $25 and two lines rated, found by sweeping offers
+        and ratings rather than reasoned out.
+
+        Equal offers alone do not reach it: with every unit at $25 and one
+        capacity for all five, the solver loads them in order and exactly one
+        lands interior, so the count is 1 against 1 and says "unique" -- which
+        it is, as a statement about the price. It takes two units able to be
+        part-loaded at once, which is what the AD and DE ratings arrange here.
+        """
+        out = copy.deepcopy(config)
+        offers = {
+            "alta": (25.0, 100.0),
+            "park_city": (25.0, 600.0),
+            "solitude": (10.0, 40.0),
+            "sundance": (30.0, 40.0),
+            "brighton": (25.0, 520.0),
+        }
+        for name, (cost, pmax) in offers.items():
+            out["fleet"][name]["cost_usd_per_mwh"] = cost
+            out["fleet"][name]["pmax_mw"] = pmax
+        scenario = scenario_from_config(out)
+        return clear(scenario, slack="D", limits={"AD": 400.0, "DE": 240.0})
+
+    def test_some_hour_has_more_basic_units_than_rows(self, tied):
+        assert self._ambiguous(tied) == TIED_HOURS
+
+    @staticmethod
+    def _ambiguous(tied):
+        return [
+            t
+            for t in tied["hours"]
+            if tied["uniqueness"]["D", t]["verdict"] == "dispatch_is_not_unique"
+        ]
+
+    def test_and_there_the_tied_units_share_an_offer_at_zero_reduced_cost(self, tied):
+        for t in self._ambiguous(tied):
+            inside = [
+                g for g in tied["gen_bus"] if tied["gen_status"][g, t] == "interior"
+            ]
+            assert len(inside) > 1
+            assert len({tied["gen_cost"][g] for g in inside}) == 1
+            for g in inside:
+                assert tied["reduced_cost"][g, t] == pytest.approx(0.0, abs=1e-9)
+
+    def test_the_price_itself_is_not_in_doubt_there(self, tied):
+        """The count is above the rows, not below, so no dual has room."""
+        for t in self._ambiguous(tied):
+            flag = tied["uniqueness"]["D", t]
+            assert flag["basic"] > flag["rows"]

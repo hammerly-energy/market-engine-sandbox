@@ -880,12 +880,37 @@ interval is a further two per bus per hour.
 
 **The two directions are different sentences and must not collapse into one
 `degenerate` bool.** `basic > rows` is the other degeneracy: the price is
-unique and *who runs* is not. Measured, every offer set to $25 with both
-limits removed, λ = 25 under slack A and slack C alike, while alta and
-park_city sit off at `rc = 0.0000` and could swap in at no cost. That is the
-dispatch table under trap 2. It is also not a kink in the cost curve — it is
-a straight stretch of it carrying two dispatches at the same cost — so the
+unique and *who runs* is not. It is not a kink in the cost curve — it is a
+straight stretch of it carrying two dispatches at the same cost — so the
 curve above is a picture of the price ambiguity only, not of both.
+
+**The example this section used to give does not reach it, and W3.1 measured
+that rather than inheriting it.** Every offer set to $25 with both limits
+removed gives λ = 25 under slack A and slack C alike, with alta and park_city
+sitting *off* at `rc = 0.0000` and able to swap in at no cost — the dispatch
+table under trap 2. The count there is `basic 1, rows 1`, and the flag says
+`unique`, correctly: it is a statement about the *price*, and the price was
+never in doubt. Units sitting at a bound with a zero reduced cost are a
+different test from the one the count performs, and the count does not claim
+to run it.
+
+Reaching `basic > rows` needs two units able to be part-loaded **at once**,
+which equal offers alone do not arrange: with one capacity for all five the
+solver loads them in order and exactly one lands interior. Found by sweeping
+offers and ratings, and banked in
+`tests/test_w2_degenerate_optimum.py`:
+
+```
+    three units at $25, AD rated 400 MW, DE rated 240, hours 20 and 21
+
+    alta       interior   offer $25   rc 0.0000
+    brighton   interior   offer $25   rc 0.0000
+
+    basic 2, rows 1        one uncongested row, two variables free
+```
+
+A MW moves between alta and brighton at no cost, so the dispatch is one of
+many and the price is still the one number.
 
 The flag inherits the flicker rather than curing it. It reads `|mu| > 1e-9`
 and the 1e-6 MW status tolerance in `generator_status`, so within a pixel of
@@ -1000,7 +1025,7 @@ of 10*.
 | **W2.6** | The slack lever | 0.5 d | A dropdown over the bus list, posted explicitly on every request. **Deleting the slack bus moves the dropdown; it does not 422.** The editor owns keeping slack in step with its bus list, and the engine's refusal of a non-bus slack is the check that catches it failing to |
 | **W2.7** | The register fixes | 0.5 d | Three small things a usability review found, batched so the page is re-rendered and looked at once rather than three times. **Wire labels get their own screen token** — `--ink-muted` is 3.46:1 on the surface and branch names are load-bearing, not decorative; **the hour slider is visually distinct** from the four that re-solve, because that difference currently lives only in prose; **results sit above the levers**, so a moved slider does not land its answer below the fold. Half a day because CLAUDE.md requires rendering and inspecting each one, and moving one label routinely creates a collision somewhere else |
 | **W2.8** ✓ | Acceptance tests | 1 d | The slack assertion, **on a fixture whose optimum is verified unique first**: moving the slack rearranges λ and the congestion split while every LMP, payment, revenue and rent stays put. **`pytest.approx(abs=1e-9)`, not equality** — a different slack is a different LP and the cancellation leaves ~1e-13 on prices and ~1e-10 on payments (trap 2). Assert the other half too, that λ *moved* by a margin outside that tolerance, or the test passes on a build where the lever does nothing. On a degenerate fixture it would flake, correctly — trap 2 against trap 3 — and that remains **untested**, because no such fixture exists here: W2.9 swept the DE limit over 1201 settings and all 24 hours and the only degeneracy w1.yaml reaches is uncongested, where trap 2 says λ does not move with the slack anyway. Proving the flake needs a scenario that is degenerate *and* congested, and finding one is open. Plus the delete-the-slack test, and `toConfig()` round-tripping to w1.yaml's numbers bit for bit. Two things the row did not anticipate, both measured: **λ moves only where a line binds** — see trap 2 — and uniqueness is checkable from fields `clear()` already returns, so it is a test rather than a remark. The emitter is JavaScript, so its half runs in `web/check-emit.html` |
-| **W2.9** ✓ | The degeneracy decision | 0.5 d | **Decided: the flag lands, the interval waits.** `clear()` grows a per-island, per-hour uniqueness flag, read off fields it already returns at no extra solve — about an hour, built at the top of W3. Whether the site ever prints `λ ∈ [15, 30]` is deferred to W4, because it is a second optimization whose worth depends on a narrative that does not exist yet. The degenerate case is reachable from the editor in one move and was measured rather than assumed — see *W2.9 decision: the flag lands, the interval waits* |
+| **W2.9** ✓ | The degeneracy decision | 0.5 d | **Decided: the flag lands, the interval waits.** `clear()` grows a per-island, per-hour uniqueness flag, read off fields it already returns at no extra solve — built at W3.1, returning `basic`, `rows` and one of `unique` / `price_is_an_interval` / `dispatch_is_not_unique`. Whether the site ever prints `λ ∈ [15, 30]` is deferred to W4, because it is a second optimization whose worth depends on a narrative that does not exist yet. The degenerate case is reachable from the editor in one move and was measured rather than assumed — see *W2.9 decision: the flag lands, the interval waits* |
 
 Two things W2 does not touch: the seven views (W3), and market arithmetic in
 JavaScript (never). If a lever needs a number `clear()` does not return,

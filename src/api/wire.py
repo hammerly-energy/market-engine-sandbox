@@ -83,6 +83,7 @@ def encode(cleared):
     bids = list(cleared["bid_bus"])
     islands = list(cleared["islands"])
     settlement = cleared["settlement"]
+    uniqueness = cleared["uniqueness"]
     fields = ("payments", "revenue", "congestion_rent", "rent_from_duals", "residual")
 
     return {
@@ -138,6 +139,17 @@ def encode(cleared):
         # Per island AND per hour. Summing the islands would let a positive
         # residual in one cancel a negative one in the other, which is the
         # per-hour mistake one dimension over.
+        # Per island and per hour, like settlement and lambda. "basic" and
+        # "rows" cross as the integers they are, so a caller can show the
+        # count that produced the verdict rather than a bare word.
+        "uniqueness": {
+            home: {
+                "basic": [uniqueness[home, t]["basic"] for t in hours],
+                "rows": [uniqueness[home, t]["rows"] for t in hours],
+                "verdict": [uniqueness[home, t]["verdict"] for t in hours],
+            }
+            for home in islands
+        },
         "settlement": {
             s: {f: [_num(settlement[s, t][f]) for t in hours] for f in fields}
             for s in islands

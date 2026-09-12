@@ -154,3 +154,88 @@ def reduced_costs(lmp, cost, gen_bus, hours):
         for g in cost
         for t in hours
     }
+
+
+def price_uniqueness(
+    gen_status,
+    gen_bus,
+    served,
+    bid_mw,
+    bid_value,
+    bid_bus,
+    mu,
+    islands,
+    island_lines,
+    hours,
+    mw_tol=1e-6,
+    mu_tol=1e-9,
+):
+    """Whether the optimum pins one price and one dispatch. {(island, t): str}.
+
+    One basic variable is needed per active row. Count both, per island and
+    per hour, and the comparison is the answer:
+
+        basic = generators strictly inside their bounds
+              + priced bids strictly between 0 and the quantity they asked for
+
+        rows  = 1  +  lines in this island whose mu is non-zero
+                ^          ^
+         the island's   each binding limit is
+         balance row    an active row
+
+        basic < rows    a row has no variable free to set its price, so the
+                        dual has room to move: lambda is an INTERVAL and the
+                        returned number is one end of it.
+
+        basic == rows   both pinned.
+
+        basic > rows    spare variables sit at zero reduced cost. The price is
+                        unique and WHO RUNS is not.
+
+    The two directions are different sentences and do not collapse into one
+    "degenerate" flag. Measured on case5 with every offer at $25 and both
+    limits removed: lambda is 25 under slack A and slack C alike, while alta
+    and park_city sit off at a reduced cost of zero and could swap in at no
+    cost. The price was never in doubt there; the dispatch was.
+
+    Nothing here solves anything. Every input is a field clear() already
+    returns, which is what makes this a count rather than a second
+    optimization. Returning the interval itself is a second optimization --
+    two LPs per island-hour to maximize and minimize lambda over the dual
+    feasible set -- and is deferred to W4.
+
+    Only PRICED bids count. An inelastic bid is a constant on the balance row,
+    not a variable, so it can hold nothing.
+
+    The flag inherits the flicker rather than curing it. It reads mu against
+    mu_tol and dispatch against mw_tol, so within a pixel of a breakpoint the
+    flag itself moves between answers. That is trap 3 one level up, and the
+    rule is unchanged: do not smooth it.
+    """
+    priced = [k for k in bid_value if bid_value[k] is not None]
+
+    out = {}
+    for home, group in islands.items():
+        here = set(group)
+        gens_here = [g for g, bus in gen_bus.items() if bus in here]
+        bids_here = [k for k in priced if bid_bus[k] in here]
+        lines_here = island_lines[home]
+
+        for t in hours:
+            basic = sum(1 for g in gens_here if gen_status[g, t] == "interior")
+            basic += sum(
+                1
+                for k in bids_here
+                if mw_tol < served[k, t] < bid_mw[k, t] - mw_tol
+            )
+            rows = 1 + sum(1 for l in lines_here if abs(mu[l, t]) > mu_tol)
+
+            if basic < rows:
+                verdict = "price_is_an_interval"
+            elif basic > rows:
+                verdict = "dispatch_is_not_unique"
+            else:
+                verdict = "unique"
+            out[home, t] = {"basic": basic, "rows": rows, "verdict": verdict}
+
+    return out

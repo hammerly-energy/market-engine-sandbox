@@ -28,6 +28,7 @@ from src.model.pricing import (
     generator_status,
     headroom,
     lmps,
+    price_uniqueness,
     reduced_costs,
 )
 from src.network.ptdf import ptdf_blocks
@@ -182,6 +183,21 @@ def clear(scenario, slack=None, limits=None):
     slack_mw = headroom(res, Pmax)
     reduced = reduced_costs(lmp, cost, gen_bus, scenario.hours)
 
+    # Whether this optimum pins one price and one dispatch, per island per
+    # hour. A count over fields already computed above, not a second solve.
+    uniqueness = price_uniqueness(
+        gen_status=status,
+        gen_bus=gen_bus,
+        served=served,
+        bid_mw=scenario.bid_mw(),
+        bid_value=scenario.bid_value(),
+        bid_bus={b.name: b.bus for b in scenario.bids},
+        mu=mu,
+        islands=islands,
+        island_lines=island_lines,
+        hours=scenario.hours,
+    )
+
     # Settlement is per island AND per hour, because the identity is per
     # island per hour. Summing the day would let a positive residual in one
     # hour cancel a negative one in another; summing the islands would do the
@@ -242,6 +258,12 @@ def clear(scenario, slack=None, limits=None):
         "bid_bus": {b.name: b.bus for b in scenario.bids},
         "bid_value": scenario.bid_value(),   # {bid: $/MWh or None}
         "bid_mw": scenario.bid_mw(),         # {(bid, hour): MW} asked for
+        # {(island, hour): {basic, rows, verdict}}. "unique", or which half
+        # of the answer is not: "price_is_an_interval" when a row has no
+        # variable free to set its dual, "dispatch_is_not_unique" when spare
+        # variables sit at zero reduced cost. Two different sentences, never
+        # one degenerate bool -- see pricing.price_uniqueness.
+        "uniqueness": uniqueness,
         "settlement": settlement,  # {(island, hour): {...}}
         "PTDF": PTDF,
     }
