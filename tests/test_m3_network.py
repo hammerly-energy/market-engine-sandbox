@@ -748,6 +748,35 @@ class TestClearEntryPoint:
         assert binding_lines(cleared, t) == set()
         assert cleared["loading"]["DE", t] == 0.0
 
+    @pytest.mark.parametrize(
+        "line, rating, holding", [("DE", 240.0, "lower"), ("AB", 150.0, "upper")]
+    )
+    def test_mu_carries_a_direction_and_its_magnitude_carries_the_worth(
+        self, line, rating, holding
+    ):
+        """|mu| is what one more MW of rating is worth; mu is not.
+
+        Both directions, because the repo only ever saw one of them: case5's
+        own binding line is DE, at its LOWER limit, where mu is positive and
+        the distinction is invisible. Rating AB at 150 is one slider move away
+        and binds at the upper limit, where mu is negative and a cost SAVING
+        is still positive.
+
+            DE at 240    f = -240.0    mu = +62.322042
+            AB at 150    f = +150.0    mu = -39.329240
+
+        The saving is measured against the cost curve rather than asserted
+        from the sign: raise the rating 1 MW and re-solve. Exact to six digits
+        in both directions, because the basis does not change over that MW.
+        """
+        base = clear(build_scenario(CONFIG), limits={line: rating})
+        wider = clear(build_scenario(CONFIG), limits={line: rating + 1.0})
+        t = base["hours"][0]
+        mu = base["mu"][line, t]
+
+        assert (mu > 0) == (holding == "lower")
+        assert base["cost"] - wider["cost"] == pytest.approx(abs(mu), abs=1e-6)
+
     def test_slack_choice_moves_prices_by_a_constant(self):
         """CLAUDE.md trap 2, asserted at the entry point.
 

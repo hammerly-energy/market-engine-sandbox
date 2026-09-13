@@ -9,9 +9,26 @@ import math
 
 
 def congestion_prices(res):
-    """Price of a line's flow capacity constraint. "$XX.XX/MWh is what a 1 MW higher capacity line would be worth."
-    {(line, t): $/MWh}. One signed number per line, from two raw duals."""
-    # mu = mu_up - mu_dn
+    """Dual on a line's flow limit. {(line, t): $/MWh}, signed.
+
+    One number per line, from the two raw duals, and the sign is the content:
+
+        mu = mu_up - mu_dn        mu > 0  the lower limit is holding
+                                  mu < 0  the upper limit is holding
+
+    |mu| is what one more MW of rating is worth. mu is not, and the difference
+    is a sign rather than a rounding -- a line binding the other way returns a
+    negative number, and prose that calls mu "the worth" prints a negative
+    price for a positive saving. Measured on w1.yaml over the day:
+
+        AB rated 150    sum mu = -943.9018    raising it 1 MW saves $943.9018
+        DE rated 240    sum mu = +979.4908    raising it 1 MW saves $979.4908
+
+    Exact to every digit in both directions. case5's own binding line is DE,
+    at its lower limit, which is why the positive case is the one the repo saw
+    first -- and why the settlement identity is written with the flow rather
+    than the limit (CLAUDE.md).
+    """
     return {
         (l, t): res["mu_up"][l, t] - res["mu_dn"][l, t]
         for (l, t) in res["mu_up"]

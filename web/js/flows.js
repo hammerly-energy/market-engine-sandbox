@@ -159,8 +159,13 @@ function row(name, cleared, hour, branches, domain) {
       ? ", no rating, so it can never bind"
       : `, rating ${limit.toFixed(1)} MW, loading ${(x * 100).toFixed(2)}%`) +
     (priced
-      ? `\nAt its ${mw < 0 ? "lower" : "upper"} limit: one more MW of rating ` +
-        `is worth $${mu.toFixed(4)}/MWh`
+      ? /* The magnitude, because a saving is positive whichever limit is
+           holding and mu is not: AB rated 150 returns mu = -39.3292 and
+           raising it 1 MW saves $39.33. The signed number is in the column,
+           where the caption says what its sign means. Abs is a formatting of
+           a returned field, as the loading column above already is. */
+        `\nAt its ${mw < 0 ? "lower" : "upper"} limit: one more MW of rating ` +
+        `is worth $${Math.abs(mu).toFixed(4)}/MWh`
       : "\nNot binding: μ = 0, so this line adds nothing to any LMP");
 
   return el;
