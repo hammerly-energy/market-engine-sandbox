@@ -34,8 +34,17 @@
   --hue-3: #cc79a7;
   --hue-4: #56b4e9;
 
-  --flow-neg: #104281;
-  --flow-pos: #a8380f;
+  /* The flow ramp's two ends, W3.6. Blue is positive (from -> to), teal is
+     negative. The stops between them are computed in scales.js, in CIE Lab;
+     these are here so the page and that module name the same two colours. */
+  --flow-blue: #104281;
+  --flow-teal: #005631;
+
+  /* Vermillion, for a refused solve and for load the market declined to
+     serve. It was --flow-pos until W3.6 took vermillion off the flow ramp,
+     and the rename is not cosmetic: a token named for the ramp that no
+     longer appears on it is a comment that lies. */
+  --alert: #a8380f;
 
   /* One typographic hierarchy, strictly ordered. The print figure's
      10.5 / 9.5 / 8.5 pt, carried over at browser scale. */
@@ -102,7 +111,7 @@ dl.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
 /* --ink-wire, not --ink-muted: this is the only line that reports the server
    is unreachable, and 3.46:1 is under AA. Same measurement as W2.7's. */
 .status { font-size: var(--type-annot); color: var(--ink-wire); }
-.status[data-state="error"] { color: var(--flow-pos); }
+.status[data-state="error"] { color: var(--alert); }
 
 .panel.wide { max-width: 68ch; }
 
@@ -184,7 +193,7 @@ button:disabled {
    itself is an identity colour for a mark, and a mark is held to 3:1, not to
    4.5 -- this is text. */
 .log li[data-state="ok"] { color: #007a59; }
-.log li[data-state="error"] { color: var(--flow-pos); }
+.log li[data-state="error"] { color: var(--alert); }
 .log li[data-state="muted"] { color: var(--ink-muted); }
 
 /* -------------------------------------------------------- W2.3, the render
@@ -241,6 +250,15 @@ button:disabled {
 .wire-label {
   fill: var(--ink-wire);
   dominant-baseline: middle;
+}
+
+/* Opaque, not the 0.75 the print register asks for. That alpha is for a
+   label over a gridline; this one sits on a wire the flow ramp can paint at
+   9.66:1, and a quarter of that showing through a branch name is the
+   strike-through the plate exists to remove. */
+.wire-label-bbox {
+  fill: var(--surface);
+  pointer-events: none;
 }
 
 .bus-label {
@@ -307,7 +325,7 @@ th:last-child { padding-right: 0; }
 
 [data-results][data-stale] h2::after {
   content: " — stale, the last solve was refused";
-  color: var(--flow-pos);
+  color: var(--alert);
   font-size: var(--type-annot);
 }
 
@@ -621,13 +639,16 @@ button.undo {
    before a hue reaches it, and it is also why a wire passing behind one does
    not run through it.
 
-   Re-check this at W3.6. Lines are grey today and will carry the blue-to-
-   vermillion flow ramp, and under deuteranopia every warm hue collapses
-   toward that vermillion and every cool one toward that blue -- the
-   measurement that put lightness rather than hue on the bus rings. What
-   keeps the square legible there is that it is a square: hue on this map is
-   now split by mark shape, not by scale, so a blue square and a blue line
-   are told apart by their outline before their colour. */
+   W3.6 landed the flow ramp on the lines and the square held, which was the
+   open question: under deuteranopia every warm hue collapses toward that
+   ramp's vermillion and every cool one toward its blue, which is the
+   measurement that put lightness rather than hue on the bus rings. What keeps
+   the square legible is that it is a square -- hue on this map is split by
+   mark shape, not by scale. Checked against the rendered ramp and not
+   assumed: --hue-0 #0072b2 on a square and #104281 on a wire at its rating
+   are the nearest pair on the page, and they differ by a --ink-2 outline, a
+   fill, and 1.91:1 of contrast between themselves -- which is why the
+   outline and the shape are what carry it, and not the colour. */
 .unit-mark {
   fill: var(--surface);
   stroke: var(--ink-2);
@@ -988,4 +1009,188 @@ button[aria-pressed="true"]:focus-visible {
 /* MW the market declined to serve. The one mark on this figure that is not
    about supply, so it sits on the axis and takes the warm end of the flow
    ramp -- the only place a hue means "refused" on this page. */
-.merit-curtail { fill: var(--flow-pos); }
+.merit-curtail { fill: var(--alert); }
+
+/* ------------------------------------------------- W3.6, the line flows
+   A grid of rows, like the LMP split above and for the same reason: six
+   lines of text and a mark apiece read faster as rows than as a chart, and
+   the mark is the only thing that has to be drawn. */
+
+.flow-group { margin: 0 0 0.7rem; }
+
+.flow-island {
+  margin: 0 0 0.3rem;
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+}
+
+.flow-row {
+  display: grid;
+  grid-template-columns: 4.4rem 1fr 4.6rem 5.2rem 4.8rem;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: var(--type-annot);
+}
+
+.flow-head {
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--grid);
+  padding-bottom: 0.2rem;
+  margin-bottom: 0.2rem;
+}
+
+/* A column header is an axis label for a table, so it is sentence case and
+   carries its units once. */
+.flow-track-head { text-align: center; }
+
+/* The endpoints, and nothing else. The row is a statement about a direction,
+   and the branch name is on the wire it describes over on the map. */
+.flow-name {
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.flow-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.flow-track {
+  position: relative;
+  height: 1.15rem;
+}
+
+/* Above the bar: every bar starts on zero and would otherwise hide the
+   reference it is measured from. */
+.flow-zero {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  border-left: 1px dashed var(--ink-muted);
+}
+
+/* The rating, in each direction. Full height and solid so a bar ending on
+   one reads as having met it, and darker when the line is actually binding
+   -- which is drawn from mu, so the tick and the bar have to agree. */
+.flow-tick {
+  position: absolute;
+  top: 0.1rem;
+  bottom: 0.1rem;
+  z-index: 1;
+  border-left: 1px solid var(--ink-muted);
+  transition: left 180ms ease;
+}
+
+.flow-tick.binding { border-left: 1.5px solid var(--ink); }
+
+.flow-bar {
+  position: absolute;
+  top: 50%;
+  height: 0.42rem;
+  transform: translateY(-50%);
+  z-index: 0;
+  /* Motion is for continuity: dragging a rating slides the ticks while the
+     bars stay, so the eye sees a limit closing on a flow. Nothing animates
+     on load. */
+  transition: left 180ms ease, width 180ms ease, background 180ms ease;
+}
+
+/* The axis ends land on the track's ends because it sits in the track's
+   column, not across the panel. */
+.flow-axis-row { margin-top: 0.1rem; }
+
+.flow-axis {
+  position: relative;
+  height: 1.05rem;
+  font-size: 0.78rem;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  border-top: 1px solid var(--grid);
+}
+
+/* Pinned to the position each one names. See flows.js: a space-between flex
+   distributes leftover space, so the zero landed next to the rule rather than
+   on it. */
+.flow-axis span {
+  position: absolute;
+  top: 0.15rem;
+}
+
+.flow-axis-lo { left: 0; }
+.flow-axis-hi { right: 0; }
+.flow-axis-mid { left: 50%; transform: translateX(-50%); }
+
+/* Three marks on the axis rule, so its alignment with the tracks above is
+   visible rather than asserted. */
+.flow-axis::before,
+.flow-axis::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  height: 0.2rem;
+  border-left: 1px solid var(--grid);
+}
+
+.flow-axis::before { left: 0; }
+.flow-axis::after { right: 0; }
+
+.flow-axis-mid::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -0.15rem;
+  height: 0.2rem;
+  border-left: 1px solid var(--ink-muted);
+}
+
+.flow-legend {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 1rem;
+  font-size: 0.78rem;
+  color: var(--ink-2);
+}
+
+.flow-key { display: flex; align-items: center; gap: 0.35rem; }
+
+/* The same height as a bar, so the key is the mark it explains at the size
+   it is drawn. */
+.flow-swatch {
+  width: 1.6rem;
+  height: 0.42rem;
+  display: inline-block;
+}
+
+.flow-ramp-note { margin: 0.15rem 0 0; flex-basis: 100%; }
+
+/* The flow, over the wire on the map. Same path: the colour replaces the
+   grey rather than fringing it, and the width is the flow in MW. The group
+   carries data-results, so a refused solve fades it and leaves the topology
+   at full strength — it is the answer that is out of date, not the picture of
+   the network. Unhittable, because the wire under it is what the grammar's
+   `closest()` finds. */
+.flow-wire {
+  fill: none;
+  stroke-linecap: round;
+  pointer-events: none;
+  transition: stroke 180ms ease, stroke-width 180ms ease;
+}
+
+/* A binding line's casing, under the coloured core and over the wire, so the
+   line reads as a sheathed cable. Categorical and drawn from mu, because
+   closeness to a limit is economically uninteresting until it binds, at which
+   point it is a step. A shape change rather than a colour one, so it survives
+   a grayscale print and every colour vision type.
+
+   --ink and not --ink-2: a core at #0072b2 is 5.05:1 and --ink-2 is 7.73:1,
+   so an --ink-2 casing would sit within 1.5:1 of its own core and the sheath
+   would read as one thick blob. --ink is darker than both hues. */
+.flow-casing {
+  fill: none;
+  stroke: var(--ink);
+  stroke-linecap: round;
+  pointer-events: none;
+}

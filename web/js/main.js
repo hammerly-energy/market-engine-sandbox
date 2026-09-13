@@ -42,6 +42,7 @@ import { bodyFor, createSolver, getLimits } from "./api.js";
 import { mountLevers } from "./controls.js";
 import { createHistory } from "./edits.js";
 import { describe, summarize } from "./errors.js";
+import { renderFlows } from "./flows.js";
 import { mountGrammar } from "./grammar.js";
 import { renderMerit } from "./merit.js";
 import { checkBounds, fetchSeed, stateFromSeed } from "./state.js";
@@ -123,6 +124,10 @@ function paint() {
     editor.buses.map((bus) => bus.name),
   );
   renderMerit(document.querySelector("#merit"), cleared, hour);
+  /* The branches are passed for their direction only -- which bus is "from"
+     and which is "to", so the panel can say which way a positive flow goes.
+     Every number in the view is the engine's. */
+  renderFlows(document.querySelector("#flows"), cleared, hour, editor.branches);
   renderIslands(document.querySelector("#islands"), cleared, hour);
 
   document.querySelector("#hour-note").textContent =

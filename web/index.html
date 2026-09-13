@@ -42,7 +42,9 @@
           no LMP, dispatch, flow or settlement figure depends on which bus it
           is, only the level of λ. A square is a generator; its bus, capacity
           and offer are on hover and on focus, because five more names would
-          collide at this scale.
+          collide at this scale. A wire's width is its flow in MW and its
+          colour is the direction; a line at its rating takes a dark casing,
+          and the key is under the line flows.
         </p>
       </section>
 
@@ -77,11 +79,10 @@
         </p>
       </section>
 
-      <!-- The four views still to be built, as empty slots. They are here
-           at W3.0 so the frame is verified carrying its full height before
-           any of them is coded, which is the order the retrofit is expensive
-           in. Five when they were written; the split landed in the price
-           panel rather than beside it, so the frame carries ten. -->
+      <!-- The views still to be built, as empty slots. They were here at W3.0
+           so the frame was verified carrying its full height before any of
+           them was coded, which is the order the retrofit is expensive in.
+           Two are left: generation by unit, and the day. -->
       <section class="panel" data-results>
         <h2>Merit Order</h2>
         <p class="note">
@@ -102,10 +103,30 @@
         </p>
       </section>
 
-      <section class="panel" data-results data-slot>
+      <section class="panel" data-results>
         <h2>Line Flows Against Limits</h2>
-        <p class="note">Not built yet. Flow, rating, loading and μ, per line.</p>
+        <p class="note">
+          Bars are the flow, on one MW scale shared by every line. Ticks are
+          that line's rating in each direction, so a bar that reaches its tick
+          is a line at its limit. Positive runs from the first bus of the
+          branch to the second.
+        </p>
         <div id="flows"></div>
+        <p class="caption">
+          μ is the dual on that line's flow limit — what one more MW of
+          rating would be worth — and it is zero unless the line is holding
+          the dispatch back. Its sign is not a magnitude. A flow limit is two
+          constraints, <code>−rating ≤ f ≤ +rating</code>, and μ is positive
+          when the lower one binds and negative when the upper one does — so
+          μ's sign and the side of zero the bar sits on always agree, which is
+          a check a reader can run by eye. A full bar and a priced μ are the
+          same fact reached twice, once from the dispatch and once from the
+          duals. A line with no ticks has no rating: it still carries power
+          and still draws a bar, but it can never bind, so it never carries a
+          μ and never moves a price. The map is drawn from the same scale — a
+          wire's width is its flow in MW and its colour is the direction,
+          blue from → to and teal the other way.
+        </p>
       </section>
 
       <section class="panel" data-results data-slot>

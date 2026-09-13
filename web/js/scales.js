@@ -129,3 +129,96 @@ export function genInk(order, name) {
   const i = order.indexOf(name);
   return i >= 0 && i < 5 ? `var(--hue-${i})` : "var(--ink-2)";
 }
+
+/* ------------------------------------------------- the flow scale, W3.6
+ *
+ * Three colours and no ramp between them. A line's HUE is the SIGN of its
+ * flow and nothing else:
+ *
+ *     f < 0   teal    power runs to -> from
+ *     f = 0   grey    idle
+ *     f > 0   blue    power runs from -> to
+ *
+ * Magnitude is carried by WIDTH, on a shared MW domain, so hue is left to do
+ * one job. The continuous ramp this replaced tried to carry direction and
+ * loading at once, and the loading half was crushed the moment a binding line
+ * got a dark casing behind it -- the core became a stripe and the hue with it.
+ *
+ * It also removes an encoding that could not be honest about an unrated line.
+ * The old ramp was keyed to f / limit, so a line with no rating sat at the
+ * neutral forever however much power it carried. A sign has an answer for
+ * every line.
+ *
+ * Measured on --surface #fcfcfb:
+ *
+ *     blue   #0072b2   5.05:1
+ *     teal   #007c54   5.10:1
+ *     grey   #8a8880   3.46:1
+ *
+ * Both hues clear the 3:1 a non-text mark is held to, and they are within
+ * 0.05 of each other, so neither direction reads as the heavier one. That
+ * matters now that lightness carries nothing for a line: two marks at the
+ * same lightness cannot be mistaken for a magnitude.
+ *
+ * The teal is the Okabe-Ito bluish green #009e73 taken from L* 57.7 to 45 so
+ * it balances the blue; at its own lightness it is 3.33:1, which clears the
+ * floor but sits paler than the blue and would have read as the weaker
+ * direction.
+ *
+ * DIRECTION DOES NOT SURVIVE colour blindness, and this was asserted here for
+ * a phase before anyone measured it. Telling the two hues apart, simulated
+ * with Vienot 1999: protan 1.56:1, deutan 1.49:1, tritan 1.44:1. The
+ * blue/vermillion pair this replaced was no better -- 1.10, 1.77, 2.35 -- so
+ * neither scheme ever carried direction to a colour-blind reader. It is
+ * carried by position in the flows panel, where the bar sits on the side of
+ * zero its flow is on, and that is the channel that actually works.
+ */
+
+export const FLOW_POS = "#0072b2";
+export const FLOW_NEG = "#007c54";
+export const FLOW_ZERO = "#8a8880";
+
+/* A solver returns 1e-14 for a line carrying nothing. Below this a flow is
+   idle and takes the neutral rather than a direction it does not have. */
+const IDLE_MW = 1e-9;
+
+export function flowInk(mw) {
+  if (mw > IDLE_MW) return FLOW_POS;
+  if (mw < -IDLE_MW) return FLOW_NEG;
+  return FLOW_ZERO;
+}
+
+/* The MW domain every flow mark is drawn on -- the panel's axis and the map's
+ * wire widths alike, so a wire that is thick there is a long bar here.
+ *
+ * It spans the flows AND the finite ratings, because the panel draws a tick
+ * at each rating and a tick outside its own axis is a mark with nowhere to
+ * go. An unrated line contributes nothing, which is why an infinite rating
+ * does not blow the scale up.
+ *
+ * Fixed across the day for the reason priceDomain gives: a scale that
+ * rescaled when the hour moved would make a mark change when only the scale
+ * changed. Re-derived per solve, and printed, so a domain that moved is
+ * visible as a domain that moved.
+ */
+export function flowDomain(cleared) {
+  let hi = 0;
+  for (const l of cleared.lines) {
+    /* Every hour, not this one. The scale is fixed across the day so that
+       scrubbing the hour never rescales a mark. */
+    for (const v of cleared.flows[l]) hi = Math.max(hi, Math.abs(v));
+    /* Finite ratings count too, because the panel draws a tick at each one
+       and a tick outside its own axis is a mark with nowhere to go. An
+       unrated line contributes nothing, which is why an infinite rating does
+       not blow the scale up. */
+    const limit = cleared.limits[l];
+    if (limit !== null) hi = Math.max(hi, Math.abs(limit));
+  }
+  return hi > 0 ? Math.ceil(hi / STEP) * STEP : STEP;
+}
+
+/* The axis ends on a multiple of this. 355.4 is an end nobody can read a
+   value off -- it is one hour's largest flow, which is an accident of the
+   data -- and 50 MW is fine enough that rounding up never leaves the longest
+   bar stranded in the middle of the track. */
+const STEP = 50;

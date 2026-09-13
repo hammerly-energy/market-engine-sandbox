@@ -27,6 +27,7 @@ from src.model.pricing import (
     congestion_prices,
     generator_status,
     headroom,
+    line_loading,
     lmps,
     price_uniqueness,
     reduced_costs,
@@ -57,14 +58,15 @@ def clear(scenario, slack=None, limits=None):
         that wants the day iterates, and neither has to undo a shape the other
         preferred.
 
-        Three fields exist for a drawing caller rather than for the solve, and
+        Four fields exist for a drawing caller rather than for the solve, and
         are derived, not new arithmetic: "congestion" is the half of the LMP
         that lmps() used to discard, "gen_cost"/"gen_pmax" are the fleet read
         straight off the Scenario so a merit-order stack can be drawn without
-        the caller holding the config too, and "gen_status"/"headroom"/
-        "reduced_cost" are where each unit sits and what that is worth. They
-        live here because the alternative is a second, untested implementation
-        of the same arithmetic in the browser.
+        the caller holding the config too, "gen_status"/"headroom"/
+        "reduced_cost" are where each unit sits and what that is worth, and
+        "loading" is a flow against its own rating. They live here because the
+        alternative is a second, untested implementation of the same
+        arithmetic in the browser.
 
     Raises:
         ValueError on a scenario this cannot price; RuntimeError from the
@@ -181,6 +183,7 @@ def clear(scenario, slack=None, limits=None):
     cost, Pmax = scenario.cost(), scenario.pmax()
     status = generator_status(res, Pmax)
     slack_mw = headroom(res, Pmax)
+    loading = line_loading(res, Fmax)
     reduced = reduced_costs(lmp, cost, gen_bus, scenario.hours)
 
     # Whether this optimum pins one price and one dispatch, per island per
@@ -240,6 +243,10 @@ def clear(scenario, slack=None, limits=None):
         "dispatch": res["p"],      # {(gen, hour): MW}
         "flows": res["f"],         # {(line, hour): MW}
         "mu": mu,                  # {(line, hour): $/MWh}
+        # f / limit, signed, on [-1, 1]. Direction and loading in one number,
+        # which is what a diverging ramp is drawn from. An unrated line is
+        # f / inf = 0. Derived, for the same reason headroom is.
+        "loading": loading,        # {(line, hour): fraction of rating}
         "lmp": lmp,                # {(bus, hour): $/MWh}
         "congestion": cong,        # {(bus, hour): $/MWh}, lmp - lmbda
         "lmbda": res["lmbda"],     # {(island, hour): $/MWh}

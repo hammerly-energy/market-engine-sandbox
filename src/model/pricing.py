@@ -5,6 +5,9 @@
 Sign convention follows how the flow constraint was written. Verify against a
 case with a published answer."""
 
+import math
+
+
 def congestion_prices(res):
     """Price of a line's flow capacity constraint. "$XX.XX/MWh is what a 1 MW higher capacity line would be worth."
     {(line, t): $/MWh}. One signed number per line, from two raw duals."""
@@ -238,4 +241,33 @@ def price_uniqueness(
                 verdict = "unique"
             out[home, t] = {"basic": basic, "rows": rows, "verdict": verdict}
 
+    return out
+
+
+def line_loading(res, Fmax):
+    """Signed loading. {(line, t): f / limit, on [-1, 1]}.
+
+    The variable a diverging colour ramp needs, and the reason it is computed
+    here rather than in the browser is the boundary rule: a division is small,
+    a second place where a flow and a rating are combined is not.
+
+    Signed, and on [-1, 1] rather than a percent of rating:
+
+        f / limit  carries direction and loading in one number. Percent of
+                   rating runs 0 to 100 and is natively sequential, so a
+                   diverging ramp drawn from it would have no midpoint to
+                   diverge about.
+
+    An unrated line is f / inf = 0 and reads as idle forever. That is the
+    honest answer to "how close is this line to its limit" for a line that has
+    none; a view that wants to say the flow is large says it with the flow.
+
+    Clamped because the solver returns 240.00000000000003 for a line at 240,
+    and a ramp indexed past its own domain is a colour nobody chose.
+    """
+    out = {}
+    for (l, t), f in res["f"].items():
+        limit = float(Fmax[l])
+        x = 0.0 if math.isinf(limit) or limit <= 0 else float(f) / limit
+        out[l, t] = min(max(x, -1.0), 1.0)
     return out

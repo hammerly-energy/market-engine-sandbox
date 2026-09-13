@@ -108,6 +108,10 @@ def encode(cleared):
         },
         "flows": _series(cleared["flows"], lines, hours),
         "mu": _series(cleared["mu"], lines, hours),
+        # Signed, on [-1, 1], and never null: an unrated line crosses as 0.0
+        # where "limits" crosses as null, because "how loaded is it" has an
+        # answer for a line with no rating and "what is its rating" does not.
+        "loading": _series(cleared["loading"], lines, hours),
         "lmp": _series(cleared["lmp"], buses, hours),
         "congestion": _series(cleared["congestion"], buses, hours),
         # One market per island, named by its slack. A connected network has

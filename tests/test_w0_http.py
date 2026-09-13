@@ -102,8 +102,8 @@ class TestWireFidelity:
 
     @pytest.mark.parametrize(
         "field",
-        ["dispatch", "flows", "mu", "lmp", "congestion", "headroom",
-         "reduced_cost", "served", "bid_mw"],
+        ["dispatch", "flows", "mu", "loading", "lmp", "congestion",
+         "headroom", "reduced_cost", "served", "bid_mw"],
     )
     def test_every_series_matches_the_in_process_result(
         self, over_http, in_process, field
@@ -119,6 +119,7 @@ class TestWireFidelity:
             "dispatch": over_http["generators"],
             "flows": over_http["lines"],
             "mu": over_http["lines"],
+            "loading": over_http["lines"],
             "lmp": over_http["buses"],
             "congestion": over_http["buses"],
             "headroom": over_http["generators"],
@@ -428,6 +429,43 @@ class TestGeneratorStatus:
                 assert over_http["headroom"][g][t] == pytest.approx(
                     over_http["gen_pmax"][g] - over_http["dispatch"][g][t]
                 )
+
+    def test_loading_is_the_flow_over_its_own_rating(self, over_http):
+        """f / limit, signed, and 0 for a line with no rating.
+
+        The browser draws a diverging ramp from this and must not divide: a
+        second place where a flow and a rating are combined is a second place
+        for the sign to be wrong, and the map and the panel would then agree
+        with each other and with nothing else.
+        """
+        for l in over_http["lines"]:
+            limit = over_http["limits"][l]
+            for t in range(len(over_http["hours"])):
+                x = over_http["loading"][l][t]
+                assert -1.0 <= x <= 1.0
+                if limit is None:
+                    # Unrated crosses as null and f / inf = 0. "How loaded is
+                    # it" has an answer here; "what is its rating" does not.
+                    assert x == 0.0
+                else:
+                    assert x == pytest.approx(over_http["flows"][l][t] / limit)
+
+    def test_a_line_at_its_rating_loads_to_one(self, over_http):
+        """The clamp, and the reason it is there.
+
+        DE binds at its lower limit in the congested hours, and the solver
+        returns -240.00000000000003 for a line rated 240. Unclamped, the ramp
+        would be indexed a hair past its own domain.
+        """
+        binding = [
+            (l, t)
+            for l in over_http["lines"]
+            for t in range(len(over_http["hours"]))
+            if abs(over_http["mu"][l][t]) > 1e-9
+        ]
+        assert binding, "no line binds anywhere in the day"
+        for l, t in binding:
+            assert abs(over_http["loading"][l][t]) == pytest.approx(1.0, abs=1e-9)
 
     def test_every_generator_and_hour_has_a_status(self, over_http):
         allowed = {"off", "interior", "at_max"}

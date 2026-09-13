@@ -33,9 +33,23 @@
  */
 
 import { generatorsAt } from "./edits.js";
-import { genInk, NO_PRICE, priceAt, priceDomain, priceInk, rampCss } from "./scales.js";
+import {
+  flowDomain,
+  flowInk,
+  genInk,
+  NO_PRICE,
+  priceAt,
+  priceDomain,
+  priceInk,
+  rampCss,
+} from "./scales.js";
 
 const NS = "http://www.w3.org/2000/svg";
+/* W3.6. A binding line's casing, as a multiple of its own core width, so the
+   sheath scales with the wire rather than being a fixed ring around a wire
+   whose width now varies with the flow. 1.8 leaves a visible dark edge either
+   side at the thinnest core the scale produces. */
+const CASING = 1.8;
 
 /* W3.2 replaced the bus identity palette. A bus used to be an Okabe-Ito hue
    in config bus order, matching src/viz/network.py. It is now a neutral disc
@@ -43,9 +57,9 @@ const NS = "http://www.w3.org/2000/svg";
    identity colour on this page at all, and nothing here to keep in step with
    the print figures' bus colours.
 
-   The scale, and why the ring takes no hue, are in scales.js. Line colour is
-   W3.6 and lines are still painted the wire grey, which is that ramp's
-   neutral, so an idle line already looks the way it will. */
+   The scale, and why the ring takes no hue, are in scales.js. W3.6 put the
+   flow ramp on the lines, and its neutral is the wire grey they were already
+   painted, so an idle network looks exactly as it did. */
 
 /* ------------------------------------------------------------- formatting */
 
@@ -213,6 +227,25 @@ export function renderNetwork(svg, state, cleared = null, hour = 0) {
   const domain = cleared ? priceDomain(cleared) : null;
   const lmpAt = (bus) =>
     cleared && cleared.lmp[bus] ? cleared.lmp[bus][hour] : null;
+  /* W3.6. The flow in MW. Null for a line the last answer does not carry,
+     which is a branch the editor has just connected: drawn immediately,
+     flowing a round trip later. */
+  const flowAt = (line) =>
+    cleared && cleared.flows[line] ? cleared.flows[line][hour] : null;
+  /* The MW scale the wire widths are drawn on, shared with the flows panel,
+     so a thick wire here is a long bar there. */
+  const flowMax = cleared ? flowDomain(cleared) : null;
+  /* MW to a stroke width. Linear, and from zero: a wire twice as thick is
+     carrying twice the power, which is the only reading that makes "width is
+     MW" true rather than decorative. The floor is what an idle line is drawn
+     at, so a branch carrying nothing is still a visible branch. */
+  const flowWidth = (mw) =>
+    size.wire + (size.wireSpan * Math.min(mw / flowMax, 1));
+  /* The dual on the flow limit. Non-zero is the line holding the dispatch
+     back, and it is the engine's own answer rather than a threshold read off
+     the picture. */
+  const muAt = (line) =>
+    cleared && cleared.mu[line] ? cleared.mu[line][hour] : 0;
 
   const size = {
     /* W3.2. The disc holds the bus name, so it is sized to the name rather
@@ -241,6 +274,10 @@ export function renderNetwork(svg, state, cleared = null, hour = 0) {
     busText: rem(1.05, s), // --type-title
     wireText: rem(0.875, s), // --type-annot
     wire: px(1.6, s),
+    /* Added to `wire` at the top of the MW domain. 1.6 to 5.4 is a range a
+       reader can rank by eye without the widest wire swallowing the bus it
+       runs into. */
+    wireSpan: px(3.8, s),
     halo: px(3.5, s),
     ringStroke: px(1, s),
     parallel: px(16, s), // how far apart n parallel branches bow
@@ -257,6 +294,20 @@ export function renderNetwork(svg, state, cleared = null, hour = 0) {
   };
 
   const wires = node("g", { class: "wires" });
+  /* W3.6. The flow, painted over the wire on the same path. Two groups and
+     not one stroke, because they are two different clocks: the wire is
+     topology and is drawn from editor state the instant a line is connected,
+     while the colour is the last answer and goes stale with the prices. An
+     idle line inks to #8a8880, which is exactly what the wire under it is
+     painted, so a network nobody has loaded looks the way it did before the
+     ramp landed.
+
+     Hue carries direction here and the flows panel carries it by position,
+     which is the half that survives a grayscale print and colour blindness
+     alike -- see the measurement in scales.js. The map has no arrows
+     -- an arrow on a five-bus map collides with the branch label it sits
+     beside, and the label is load-bearing. */
+  const flows = node("g", { class: "flows", "data-results": "" });
   const labels = node("g", { class: "wire-labels" });
   for (const [name, br] of Object.entries(state.branches)) {
     const a = at.get(br.from);
@@ -292,13 +343,66 @@ export function renderNetwork(svg, state, cleared = null, hour = 0) {
     );
     wires.append(g);
 
-    labels.append(
+    const load = flowAt(name);
+    /* Width is the flow in MW, on the shared domain. Hue is its sign. The
+       two channels were one continuous ramp over f / limit until the sketch
+       at W3.6 split them, and the split is what lets an unrated line say
+       anything at all: it has no rating to be a fraction of, and it does
+       have a flow. */
+    const core = load === null ? size.wire : flowWidth(Math.abs(load));
+    if (load !== null && Math.abs(muAt(name)) > 1e-9) {
+      /* Binding: a dark casing under the coloured core, so the wire reads as
+         a sheathed cable. Categorical and drawn from mu, because closeness to
+         a limit is economically uninteresting until it binds, at which point
+         it is a step. A shape change rather than a colour one, so it survives
+         a grayscale print and every colour vision type. */
+      flows.append(
+        node("path", {
+          d,
+          class: "flow-casing",
+          "stroke-width": core * CASING,
+        }),
+      );
+    }
+    if (load !== null) {
+      /* A style, not a stroke attribute, for the reason .unit-mark records:
+         a presentation attribute loses to any stylesheet declaration. */
+      flows.append(
+        node("path", {
+          d,
+          class: "flow-wire",
+          "stroke-width": core,
+          style: `stroke: ${flowInk(load)}`,
+        }),
+      );
+    }
+
+    /* The name, on a bbox rather than on a halo alone.
+       A stroke halo follows the glyph outlines, so a line crossing the label
+       shows through the gap between two letters -- invisible while a wire was
+       pale grey, and a strike-through once W3.6 painted DE saturated blue at
+       its rating. CLAUDE.md's rule for a label over a data line is a bbox,
+       and this is that: an opaque surface plate under the text, sized from
+       the character count because the text is not in the document yet and the
+       only decision the number makes is how wide a rectangle is. */
+    const lx = (a.x + 2 * cx + b.x) / 4;
+    const ly = (a.y + 2 * cy + b.y) / 4;
+    const lw = name.length * size.wireText * 0.62 + size.wireText * 0.5;
+    const lh = size.wireText * 1.15;
+    const plate = node("g", { class: "wire-label-group" });
+    plate.append(
+      node("rect", {
+        x: lx - lw / 2,
+        y: ly - lh / 2,
+        width: lw,
+        height: lh,
+        class: "wire-label-bbox",
+      }),
       node(
         "text",
         {
-          // Quadratic midpoint, t = 1/2.
-          x: (a.x + 2 * cx + b.x) / 4,
-          y: (a.y + 2 * cy + b.y) / 4,
+          x: lx,
+          y: ly,
           class: "wire-label",
           "font-size": size.wireText,
           "stroke-width": size.halo,
@@ -306,6 +410,7 @@ export function renderNetwork(svg, state, cleared = null, hour = 0) {
         name,
       ),
     );
+    labels.append(plate);
   }
 
   const discs = node("g", { class: "buses" });
@@ -459,7 +564,7 @@ export function renderNetwork(svg, state, cleared = null, hour = 0) {
      refused solve leaves the topology exactly as the editor declares it --
      it is the answer that is out of date, not the picture of the network. */
   discs.setAttribute("data-results", "");
-  svg.append(wires, labels, discs, units);
+  svg.append(wires, flows, labels, discs, units);
 }
 
 /* ---------------------------------------------------------------- tables */

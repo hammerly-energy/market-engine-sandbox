@@ -556,6 +556,58 @@ forever, which is correct and also belongs on the legend.
 `f / limit` is arithmetic, so `clear()` returns it and the browser does not
 compute it — the same rule, and the same reason, as `headroom`.
 
+#### What W3.6 landed
+
+The ramp, and the panel it is keyed under. `clear()` grew `loading` —
+`f / limit`, signed, clamped to `[−1, 1]` because the solver returns
+`-240.00000000000003` for a line rated 240 and a ramp indexed past its own
+domain is a colour nobody chose. `flowInk()` in `web/js/scales.js` is the one
+definition the panel's bars and the map's wires both read.
+
+Interpolated in CIE Lab from the neutral to each end, measured against
+`--surface #fcfcfb`:
+
+```
+    toward blue                     toward vermillion
+    0.00  #8a8880   3.46:1          0.00  #8a8880   3.46:1
+    0.25  #737581   4.46:1          0.25  #987664   4.00:1
+    0.50  #5b6381   5.77:1          0.50  #a06349   4.68:1
+    0.70  #455681   7.05:1          0.70  #a55433   5.22:1
+    1.00  #104281   9.66:1          1.00  #a8380f   6.32:1
+```
+
+Contrast rises monotonically from the neutral in both directions, so the idle
+line is the minimum and every stop clears the 3:1 a non-text mark is held to.
+Both ends are dark and the middle is light, which is what carries *magnitude*
+through a grayscale print. **Direction does not survive that print**, and it
+is carried by position in the flows panel — the bar sits on the side of zero
+its flow is on — which is why direction is stated there and not on the map.
+
+**No threshold is marked, and the 70% above is not one.** The domain is the
+rating itself, so the track's ends *are* the limit and there is no
+intermediate number for a reader to mistake for the midpoint. The sentence
+this section used to require on the legend is therefore unnecessary rather
+than omitted.
+
+**An unrated line has no track at all**, and that is the panel's one real
+design decision. `f / ∞ = 0` says it can never bind, so "how close is it to
+its limit" has no answer; a bar drawn against the largest flow on the panel
+would be a second scale in the same column, and a reader would compare two
+lines that were never measured the same way. The flow is printed and the
+track says `no rating`. Four of case5's six branches are unrated, so most of
+the panel is that state, which is the honest picture of why the same two
+lines carry every μ in the ledger.
+
+**A full bar and a priced μ are the same fact reached twice** — once from the
+primal, once from the dual — so the panel draws the bar from `loading` and
+the binding mark from `mu`, and neither is derived from the other.
+
+One thing the ramp broke and fixed. A branch label's stroke halo follows the
+glyph outlines, so a wire showed through the gap between two letters: `DE`
+was struck through the moment it was painted `#104281` at its rating.
+Invisible while every wire was pale grey. The label now sits on an opaque
+surface plate, which is CLAUDE.md's own bbox rule applied to the map.
+
 ### What the engine already refuses
 
 Measured against the M3 case5 scenario, not assumed. This table exists so W1
