@@ -150,6 +150,11 @@ def encode(cleared):
             home: {
                 "basic": [uniqueness[home, t]["basic"] for t in hours],
                 "rows": [uniqueness[home, t]["rows"] for t in hours],
+                # Variables at a bound the objective is indifferent about.
+                # Crosses because it is what the dispatch verdict is drawn
+                # from, and a caller that shows the verdict should be able to
+                # show the count behind it, as it can for basic and rows.
+                "tied": [uniqueness[home, t]["tied"] for t in hours],
                 "verdict": [uniqueness[home, t]["verdict"] for t in hours],
             }
             for home in islands

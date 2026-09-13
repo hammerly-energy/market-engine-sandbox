@@ -167,11 +167,17 @@ def price_uniqueness(
     bid_value,
     bid_bus,
     mu,
+    flows,
+    Fmax,
+    lmp,
+    reduced_cost,
+    gen_pmax,
     islands,
     island_lines,
     hours,
     mw_tol=1e-6,
     mu_tol=1e-9,
+    rc_tol=1e-9,
 ):
     """Whether the optimum pins one price and one dispatch. {(island, t): str}.
 
@@ -181,10 +187,29 @@ def price_uniqueness(
         basic = generators strictly inside their bounds
               + priced bids strictly between 0 and the quantity they asked for
 
-        rows  = 1  +  lines in this island whose mu is non-zero
+        rows  = 1  +  lines in this island sitting at a rating
                 ^          ^
-         the island's   each binding limit is
-         balance row    an active row
+         the island's   each active flow limit
+         balance row    is a row
+
+    A row is counted from the PRIMAL -- the flow is at the rating -- and not
+    from mu. They usually agree, and mu != 0 does imply the flow is at its
+    limit, so the two are unioned below and the dual can only ever add a row
+    the primal test already found. But the converse fails, and it fails in the
+    direction that matters: a line can sit exactly at its rating with mu = 0,
+    which is an active row holding a dual that is free to move. Counting by mu
+    misses it, under-counts rows, and reports "unique" at precisely the knife
+    edge this function exists to find. Measured on configs/w1.yaml, hour 18,
+    with DE rated at the 282.84 MW it carries when unrated:
+
+        mu[DE] = 0.0, f[DE] = -282.84033 = -rating exactly
+
+        bus   LMP      dCost/dLoad from below   from above
+         B   30.0000          26.3845            30.0000
+         D   30.0000          30.0000            39.9427
+
+    The price at D is an interval $9.94 wide and the old count called it
+    unique.
 
         basic < rows    a row has no variable free to set its price, so the
                         dual has room to move: lambda is an interval and the
@@ -192,8 +217,36 @@ def price_uniqueness(
 
         basic == rows   both pinned.
 
-        basic > rows    spare variables sit at zero reduced cost. The price is
-                        unique and who runs is not.
+        basic > rows    more variables are free than there are rows to pin
+                        them, so the optimum is a face and not a vertex.
+
+    That last test is not the only way the dispatch goes free, and on its own
+    it misses the ordinary one: a variable sitting AT a bound whose reduced
+    cost is zero. The objective is flat in the direction its bound allows, so
+    it can be moved in at no cost and the answer is one of several. Counted
+    here as `tied` -- generators off or at_max with |LMP - offer| ~ 0, and
+    priced bids at a bound whose valuation equals the LMP at their bus.
+
+    THE TIED COUNT IS ONLY READ WHEN THE PRICE IS UNIQUE, and that gate is
+    what makes it sound rather than merely suggestive. A reduced cost is
+    measured against lambda, so when lambda is an interval it is measured
+    against one arbitrary end of it and a zero carries no information.
+    Measured on configs/w1.yaml with both limits removed:
+
+        hour 8    A2 at_max, rc 0.0, basic 0 < rows 1
+                  perturbing every offer by +/-1e-4 moves no dispatch at all.
+                  The dispatch is unique; the zero is an artifact of lambda
+                  being [15, 30] and rc being computed at 15.
+
+        hour 20   A2 at_max, rc 0.0, basic 2 == rows 2, AD/DE rated
+                  three distinct dispatches share a cost of 21900.000000.
+                  The dispatch really is one of several.
+
+    Same signal, opposite truth, told apart by the gate and by nothing else.
+
+    So a "price_is_an_interval" verdict says nothing about the dispatch. It is
+    not a claim that the dispatch is unique -- it is a refusal to make one
+    from fields that cannot support it.
 
     The two directions are different sentences and do not collapse into one
     "degenerate" flag. Measured on case5 with every offer at $25 and both
@@ -217,6 +270,42 @@ def price_uniqueness(
     """
     priced = [k for k in bid_value if bid_value[k] is not None]
 
+    def _tied(gens_here, bids_here, t):
+        """Variables at a bound the objective is indifferent about moving.
+
+        A unit whose capacity is zero is skipped: its two bounds coincide, so
+        it cannot move however flat the objective is, and counting it would
+        report an ambiguity that has nowhere to go. Same for a bid asking for
+        nothing this hour.
+        """
+        n = 0
+        for g in gens_here:
+            if gen_pmax[g] <= mw_tol:
+                continue
+            if gen_status[g, t] != "interior" and abs(reduced_cost[g, t]) <= rc_tol:
+                n += 1
+        for k in bids_here:
+            asked = bid_mw[k, t]
+            if asked <= mw_tol:
+                continue
+            got = served[k, t]
+            at_bound = got <= mw_tol or got >= asked - mw_tol
+            if at_bound and abs(lmp[bid_bus[k], t] - bid_value[k]) <= rc_tol:
+                n += 1
+        return n
+
+    def _active(l, t):
+        """Is this line's flow limit holding? Primal first, dual as a union.
+
+        An unrated line has Fmax = inf and no flow reaches it, so it is never
+        active -- which is the same statement line_loading() makes when it
+        maps f / inf to zero.
+        """
+        limit = float(Fmax[l])
+        if abs(flows[l, t]) >= limit - mw_tol:
+            return True
+        return abs(mu[l, t]) > mu_tol
+
     out = {}
     for home, group in islands.items():
         here = set(group)
@@ -231,15 +320,22 @@ def price_uniqueness(
                 for k in bids_here
                 if mw_tol < served[k, t] < bid_mw[k, t] - mw_tol
             )
-            rows = 1 + sum(1 for l in lines_here if abs(mu[l, t]) > mu_tol)
+            rows = 1 + sum(1 for l in lines_here if _active(l, t))
+
+            tied = _tied(gens_here, bids_here, t)
 
             if basic < rows:
                 verdict = "price_is_an_interval"
-            elif basic > rows:
+            elif basic > rows or tied:
                 verdict = "dispatch_is_not_unique"
             else:
                 verdict = "unique"
-            out[home, t] = {"basic": basic, "rows": rows, "verdict": verdict}
+            out[home, t] = {
+                "basic": basic,
+                "rows": rows,
+                "tied": tied,
+                "verdict": verdict,
+            }
 
     return out
 

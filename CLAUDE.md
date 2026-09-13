@@ -930,10 +930,13 @@ the derivative at the slack, which is trap 2's statement in another form.
     basic = # generators strictly inside their bounds
           + # bids strictly between 0 and their quantity
 
-    rows  = 1  +  # lines with mu != 0
+    rows  = 1  +  # lines sitting at a rating
             ▲         ▲
-     the island's   each binding limit
-     balance row    is an active row
+     the island's   each active limit
+     balance row    is a row
+
+    tied  = # generators off or at_max with |LMP − offer| ≈ 0
+          + # priced bids at a bound whose value ≈ the LMP at their bus
 ```
 
 `basic < rows` means a row is held by a variable pinned at a bound, so the
@@ -942,6 +945,59 @@ rows = 1`. Every input is a field `clear()` already returns, which is what
 makes detection a count rather than a second solve — the same count is
 already written as `test_one_basic_unit_per_active_row`, where it is the
 uniqueness precondition W2.8's slack assertion depends on.
+
+**A row is counted from the primal, and this file said `mu != 0` until W3.8
+measured it.** A line can sit exactly on its rating carrying `mu = 0`. The row
+is active — it is what holds the dispatch where it is — but it earns no rent,
+so counting by the dual misses it, under-counts `rows`, and returns `unique`
+at precisely the knife edge the flag exists to find. `mu != 0` does imply the
+flow is at its limit, so the two tests are unioned and the dual can only ever
+re-find a row the primal already has.
+
+Reachable in one move and reproducible without a magic number: solve
+`configs/w1.yaml` unrated, read DE's own flow back, rate DE at it.
+
+```
+    DE rated 282.84033120469894 = the flow it carries unrated, hour 18
+
+    mu[DE] = 0.0      f[DE] at its rating to 1e-9
+
+    bus   LMP       dCost/dLoad from below   from above
+     B   30.0000          26.3845             30.0000
+     D   30.0000          30.0000             39.9427
+```
+
+The price at D is an interval $9.94 wide and the old count called it unique.
+
+**`tied` is the other half, and it is read only when the price is unique.**
+`basic > rows` is not the only way the dispatch goes free, and on its own it
+misses the ordinary one: a variable sitting *at* a bound whose reduced cost is
+zero. The objective is flat in the direction its bound allows, so it moves in
+at no cost and the answer is one of several.
+
+The gate is what makes that sound rather than merely suggestive. A reduced
+cost is measured against λ, so where λ is an interval it is measured against
+one arbitrary end of it and a zero carries no information. Measured on
+w1.yaml with both limits removed:
+
+```
+    hour 8    A2 at_max, rc 0.0, basic 0 < rows 1
+              perturbing every offer by ±1e-4 moves no dispatch at all.
+              Unique. The zero is an artifact of λ being [15, 30].
+
+    hour 20   A2 at_max, rc 0.0, basic 2 == rows 2, AD and DE rated
+              three distinct dispatches share a cost of 21900.000000.
+              Genuinely one of several.
+```
+
+Same signal, opposite truth, told apart by the gate and by nothing else. So
+`price_is_an_interval` says nothing about the dispatch — it is a refusal to
+make a claim from fields that cannot support one.
+
+On the tied fixture the flag now agrees with ground truth at **all 24 hours**,
+where ground truth is "does perturbing an offer by ±1e-4 produce a different
+dispatch at equal true cost": 16 hours yes, 8 no. The old count found 2 of
+the 16.
 
 Returning the interval is a second optimization and not a count: fix the
 primal at its optimum, then maximize and minimize λ over the dual feasible
@@ -991,11 +1047,17 @@ The pair of hours the flag has to get right is banked ahead of it in
 `tests/test_w2_degenerate_optimum.py`: hour 8 with the limits off, and hour 7
 of the same solve as its control. It also carries a negative result worth
 having in one place. That fixture cannot flake W2.8's slack assertion, and
-neither can any setting of w1.yaml's limits — swept over 1201 DE ratings and
-all 24 hours, the only pattern this scenario reaches is `basic 0, rows 1`,
-which is degenerate and uncongested. Measured there, all five slacks return
-15.0000. So degeneracy and slack-sensitivity are independent on this network,
-and the fixture that would show them together has still to be found.
+neither can any setting of w1.yaml's limits.
+
+The sweep that first asked walked 1201 DE ratings on a 1 MW grid and found
+only `basic 0, rows 1`. A grid cannot land on 282.84033120469894, and rating
+DE there is a second pattern, `basic 1, rows 2`. So that sentence was a
+statement about the grid. The conclusion survives for a better reason: both
+patterns carry `mu = 0`, so every bus prices at λ and trap 2 says λ does not
+move with the slack unless a line binds. Measured, all five slacks — 15.0000
+at hour 8, 30.0000 at the pinned point. A fixture that is degenerate *and*
+carries a non-zero μ would show them together, and finding one is still
+open.
 
 ### Frontend stack
 
