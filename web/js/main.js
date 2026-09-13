@@ -133,8 +133,8 @@ function paint() {
   renderIslands(document.querySelector("#islands"), cleared, hour);
 
   document.querySelector("#hour-note").textContent =
-    `Hour ${hour + 1} of ${cleared.hours.length}. Moving the hour does not ` +
-    `re-solve — the whole day came back with the last answer.`;
+    `Hour ${hour + 1} of ${cleared.hours.length}. The whole day came back ` +
+    `with the last solve.`;
 }
 
 /* The three panels that describe the editor rather than the market: what it
@@ -209,10 +209,11 @@ async function submit() {
   markStale(false);
   paint();
 
+  const islands = Object.keys(cleared.islands).length;
   say(
     `Cleared ${cleared.hours.length} hours. ` +
       `${cleared.buses.length} buses, ${cleared.lines.length} lines, ` +
-      `${Object.keys(cleared.islands).length} island(s), slack ${cleared.slack}.`,
+      `${islands} island${islands === 1 ? "" : "s"}, slack ${cleared.slack}.`,
   );
 }
 

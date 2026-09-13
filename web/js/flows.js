@@ -61,8 +61,10 @@ function header() {
   row.append(
     cell("Line", "flow-name"),
     /* The bar is the flow and the ticks are the rating, so the column is
-       named for both. Units are on the axis below it, once. */
-    cell("Flow against rating", "flow-track-head"),
+       named for both. It carries the MW once, for the axis under it: at this
+       panel's width the axis ends could not hold "−400 MW" without wrapping
+       into the legend below them. */
+    cell("Flow against rating (MW)", "flow-track-head"),
     cell("Flow (MW)", "flow-num"),
     cell("Loading (%)", "flow-num"),
     cell("μ ($/MWh)", "flow-num"),
@@ -185,9 +187,9 @@ function axis(domain) {
   const ax = document.createElement("div");
   ax.className = "flow-axis";
   for (const [text, cls] of [
-    [`−${domain} MW`, "flow-axis-lo"],
+    [`−${domain}`, "flow-axis-lo"],
     ["0", "flow-axis-mid"],
-    [`+${domain} MW`, "flow-axis-hi"],
+    [`+${domain}`, "flow-axis-hi"],
   ]) {
     ax.append(cell(text, cls));
   }
@@ -220,9 +222,8 @@ function legend() {
   const says = document.createElement("p");
   says.className = "flow-ramp-note";
   says.textContent =
-    "Ticks are the line's rating. A bar that reaches its tick is a line at " +
-    "its limit; a line with no ticks has no rating and can never bind. The " +
-    "same colours ink the map, where a wire's width is its flow in MW.";
+    "Ticks are the rating. A bar reaching its tick is a line at its limit. " +
+    "The same colours ink the map.";
   wrap.append(says);
   return wrap;
 }

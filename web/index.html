@@ -10,10 +10,9 @@
   <header class="masthead">
     <h1>Market Engine</h1>
     <p class="subhead">
-      A nodal DC market clearing engine. LP dispatch, duals as prices. Five
-      synthetic generators on a five-bus teaching case, cost-based offers. No
-      unit commitment, no storage, no reserves, and no comparison against
-      published prices.
+      Nodal DC clearing. LP dispatch, duals as prices. Five synthetic
+      generators on a five-bus case. No unit commitment, no storage, no
+      reserves, no validation against real prices.
     </p>
   </header>
 
@@ -37,24 +36,17 @@
                          to apply the armed mode."></svg>
         <div class="legend" id="legend" data-results></div>
         <p class="caption" id="network-caption">
-          A bus is a disc with its name inside it; the ring around it is its
-          LMP. The outer ring marks the slack, which is an accounting origin —
-          no LMP, dispatch, flow or settlement figure depends on which bus it
-          is, only the level of λ. A square is a generator; its bus, capacity
-          and offer are on hover and on focus, because five more names would
-          collide at this scale. A wire's width is its flow in MW and its
-          colour is the direction; a line at its rating takes a dark casing,
-          and the key is under the line flows.
+          A disc is a bus and its ring is the LMP; the outer ring is the slack. A
+          square is a generator — details on hover. A wire's width is its flow and
+          its colour the direction.
         </p>
       </section>
 
       <section class="panel">
         <h2>Levers</h2>
         <p class="note">
-          A filled thumb re-solves. The hollow one indexes a day already on the
-          page. Nothing is debounced — at a degenerate breakpoint the price
-          genuinely flickers between equally valid values, and that is shown
-          rather than smoothed away.
+          A filled thumb re-solves; the hollow one indexes the day already here.
+          Nothing is debounced, so a degenerate price flickers.
         </p>
         <div id="levers"></div>
       </section>
@@ -69,13 +61,12 @@
         <h2>Locational Marginal Price (LMP)</h2>
         <p class="note" id="hour-note">Waiting for the first solve…</p>
         <p class="note">
-          The dashed line is λ, the energy price, and it is the same at every
-          bus. The bar is congestion: what moves a bus away from it.
+          The dashed line is λ, the same at every bus. The bar is congestion.
         </p>
         <div id="split"></div>
         <p class="caption">
-          Congestion is zero at the slack bus, so its price is λ. Move the
-          slack and every bar changes length while no price moves.
+          Congestion is zero at the slack, so its price is λ. Move the slack: the
+          bars change, the prices do not.
         </p>
       </section>
 
@@ -86,46 +77,28 @@
       <section class="panel" data-results>
         <h2>Merit Order</h2>
         <p class="note">
-          Offers cheapest first, each block as wide as its capacity and as
-          tall as its cost. The solid part ran. The dashed staircase is
-          demand, and λ is the rule across it.
+          Offers cheapest first, each block as wide as its capacity and as tall as
+          its cost. Solid ran. Dashed is demand; λ is the rule across it.
         </p>
         <div id="merit"></div>
         <p class="caption">
-          A cheap block left empty beside a dearer one that is full is
-          congestion: the line that would carry those MW is at its limit, so
-          the stack is not dispatched in its own order. That is also why the
-          intersection here is not the price at any particular bus — with a
-          line binding there is no single marginal unit, and the LMP panel
-          above is where the prices are. Firm bids are valued at the offer
-          cap, far above every offer, so they are drawn at the ceiling rather
-          than to scale.
+          A cheap block left empty beside a full dearer one is congestion. Bids sit
+          at the ceiling, not to scale: the offer cap is far above every offer.
         </p>
       </section>
 
       <section class="panel" data-results>
         <h2>Line Flows Against Limits</h2>
         <p class="note">
-          Bars are the flow, on one MW scale shared by every line. Ticks are
-          that line's rating in each direction, so a bar that reaches its tick
-          is a line at its limit. Positive runs from the first bus of the
-          branch to the second.
+          Bars are the flow, on one MW scale shared by every line. Ticks are that
+          line's rating each way. Positive runs from the branch's first bus to its
+          second.
         </p>
         <div id="flows"></div>
         <p class="caption">
-          μ is the dual on that line's flow limit — what one more MW of
-          rating would be worth — and it is zero unless the line is holding
-          the dispatch back. Its sign is not a magnitude. A flow limit is two
-          constraints, <code>−rating ≤ f ≤ +rating</code>, and μ is positive
-          when the lower one binds and negative when the upper one does — so
-          μ's sign and the side of zero the bar sits on always agree, which is
-          a check a reader can run by eye. A full bar and a priced μ are the
-          same fact reached twice, once from the dispatch and once from the
-          duals. A line with no ticks has no rating: it still carries power
-          and still draws a bar, but it can never bind, so it never carries a
-          μ and never moves a price. The map is drawn from the same scale — a
-          wire's width is its flow in MW and its colour is the direction,
-          blue from → to and teal the other way.
+          μ is what one more MW of rating is worth — zero unless the line
+          binds. Its sign says which limit is holding. No ticks means no
+          rating, so it can never bind.
         </p>
       </section>
 
@@ -152,19 +125,16 @@
         <h2>Islands and the Settlement Residual</h2>
         <div id="islands"></div>
         <p class="caption">
-          One energy balance, one λ and one settlement identity per island, per
-          hour. λ is the LMP at that island's slack. The residual is congestion
-          rent measured from the money — <code>payments − revenue</code> — minus
-          the same rent derived from the duals, <code>−Σ μ·f</code>. Two
-          independent routes to one number; it is displayed rather than hidden
-          because a visible <code>≈ 0</code> is the claim the rest of this rests
-          on.
+          One λ and one settlement identity per island, per hour. The residual
+          is rent from the money minus rent from the duals — shown, not
+          hidden.
         </p>
       </section>
 
       <section class="panel span-all" data-results data-slot>
         <h2>The Day</h2>
-        <p class="note">Not built yet. LMP at every bus across all 24 hours.</p>
+        <p class="note">Not built yet. LMP at every bus across 24 hours.
+        </p>
         <div id="heatmap"></div>
       </section>
     </main>
@@ -188,11 +158,9 @@
     <section class="panel">
       <h2>Traffic</h2>
       <p class="note">
-        Every request carries a monotonic id and only the freshest response is
-        applied — a drag fires many solves and they return out of order. A
-        burst is what the solver sees during a drag: one applied, the rest
-        dropped.
-      </p>
+        Only the freshest response is applied — a drag fires many solves and they
+          return out of order.
+        </p>
       <p class="controls">
         <button type="button" id="solve">Solve once</button>
         <button type="button" id="burst">Burst of five</button>

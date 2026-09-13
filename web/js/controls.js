@@ -270,8 +270,7 @@ export function mountLevers(root, state, { onEdit, onHour }) {
   /* ---- the hour. First, because it is the one that does not re-solve. */
   const hours = group(
     "Hour",
-    "Indexes the day the last solve returned. Playing it posts nothing — the " +
-      "day is already here.",
+    "Indexes the day already here. Playing posts nothing.",
   );
   const lastHour = Math.max(state.shape.length, 1);
 
@@ -353,9 +352,8 @@ export function mountLevers(root, state, { onEdit, onHour }) {
    */
   const origin = group(
     "Slack Bus",
-    "An accounting origin, not a modelling assumption. Moving it moves λ and " +
-      "the split between energy and congestion; it moves no LMP, no payment " +
-      "and no settlement figure at all. The ring on the map follows it.",
+    "An accounting origin. Moving it moves λ and the energy/congestion " +
+      "split, and no LMP, payment or settlement figure.",
   );
   const slack = chooser({
     name: "Slack",
@@ -375,9 +373,8 @@ export function mountLevers(root, state, { onEdit, onHour }) {
      rating belongs to, and dropping the override restores it exactly. */
   const lines = group(
     "Line Ratings",
-    "An override passed to the engine alongside the scenario, not an edit to " +
-      "it. ∞ is an unrated line, which is what the scenario says — not a " +
-      "rating large enough never to bind.",
+    "An override passed alongside the scenario, not an edit to it. ∞ is an " +
+      "unrated line, not a very large rating.",
   );
   for (const [line, branch] of Object.entries(state.branches)) {
     const s = slider({
@@ -399,14 +396,13 @@ export function mountLevers(root, state, { onEdit, onHour }) {
 
   /* ---- generators: capacity and offer, two levers on one unit.
    *
-   * The label is the name alone. It used to carry the bus after it -- "A1
-   * (A) capacity" -- because a place name said nothing about where the unit
-   * was. A1 does, so the suffix became the same letter twice. */
+   * The label is the name alone. It used to carry the bus after it, because
+   * the place names the fleet had before W3.7 said nothing about where a
+   * unit was. A1 does, so the suffix became the same letter twice. */
   const fleet = group(
     "Generators",
-    "Capacity and the offer each unit is dispatched against. Offers are " +
-      "cost-based; there is no unit commitment, so a unit may run at any " +
-      "level between zero and its capacity.",
+    "Capacity and offer per unit. No unit commitment, so a unit may run at " +
+      "any level up to its capacity.",
   );
   for (const [name, gen] of Object.entries(state.fleet)) {
     const cap = slider({
@@ -450,9 +446,8 @@ export function mountLevers(root, state, { onEdit, onHour }) {
      which is M9(a)'s figure and a config line, not a slider on this page. */
   const demand = group(
     "Demand Bids",
-    "Peak MW per named bid, scaled by the 24-hour shape. Every bid is firm — " +
-      "valued at the offer cap — so it is served unless the network cannot " +
-      "reach it.",
+    "Peak MW per bid, scaled by the 24-hour shape. Every bid is firm, at " +
+      "the offer cap.",
   );
   for (const [name, bid] of Object.entries(state.bids)) {
     const s = slider({

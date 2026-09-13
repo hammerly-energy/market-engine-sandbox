@@ -65,21 +65,21 @@ export const MODES = [
     label: "Move Bus",
     verb: "Move",
     takes: [],
-    hint: "Drag a bus to move it. Coordinates are editor state — they never cross the wire, and no price depends on them.",
+    hint: "Drag a bus to move it. Coordinates never cross the wire.",
   },
   {
     id: "add-bus",
     label: "+ Bus",
     verb: "Add bus",
     takes: ["ground"],
-    hint: "Click empty ground to place a bus. It gets no generator and no bid — a connected bus with neither still prices, and gets a real LMP.",
+    hint: "Click empty ground to place a bus. It gets no generator and no bid.",
   },
   {
     id: "connect",
     label: "+ Line",
     verb: "Add line",
     takes: ["bus"],
-    hint: "Click one bus, then another. The new line is unrated — a rating invented here would manufacture congestion nobody asked for.",
+    hint: "Click one bus, then another. The new line is unrated.",
   },
   {
     id: "add-generator",
@@ -91,14 +91,14 @@ export const MODES = [
        standing in for a generator's name, since the marks are unlabelled. */
     mark: "unit",
     takes: ["bus"],
-    hint: "Click a bus to put a 100 MW unit on it, offered at $25/MWh — between the cheapest and dearest offers in the seeded fleet.",
+    hint: "Click a bus to put a 100 MW unit on it, offered at $25/MWh.",
   },
   {
     id: "remove",
     label: "Remove Item",
     verb: "Remove",
     takes: ["bus", "branch", "generator"],
-    hint: "Click a bus, a line or a generator. Removing a bus removes the lines, units and bids that name it. Undo puts it back.",
+    hint: "Click a bus, a line or a generator. Undo puts it back.",
   },
 ];
 

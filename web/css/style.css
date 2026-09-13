@@ -1026,7 +1026,10 @@ button[aria-pressed="true"]:focus-visible {
 
 .flow-row {
   display: grid;
-  grid-template-columns: 4.4rem 1fr 4.6rem 5.2rem 4.8rem;
+  /* Measured in the frame: 19rem of fixed columns and their gaps came to
+     339 px in a 378 px panel, so the last header sat outside it and the track
+     was 39 px of the 378. Narrower columns, headers wrapping over two lines. */
+  grid-template-columns: 3.6rem minmax(4rem, 1fr) 4.2rem 4.2rem 4rem;
   align-items: center;
   gap: 0.55rem;
   font-size: var(--type-annot);

@@ -672,12 +672,9 @@ export function renderLegend(el, cleared) {
   const note = document.createElement("p");
   note.className = "ramp-note";
   note.textContent = domain
-    ? "Bus ring: LMP ($/MWh), carried twice — darker and thicker is dearer. " +
-      "The domain is every bus over all 24 hours of this solve, and the hour " +
-      "does not rescale it. A thin dashed ring is a bus this solve did not " +
-      "price."
-    : "Bus ring: LMP ($/MWh), darker and thicker is dearer. No solve has " +
-      "landed yet.";
+    ? "Bus ring: LMP ($/MWh), darker and thicker is dearer. The domain is " +
+      "every bus over the whole day; the hour does not rescale it."
+    : "Bus ring: LMP ($/MWh), darker and thicker is dearer. No solve yet.";
   el.append(note);
 }
 
