@@ -620,6 +620,7 @@ be checked against a list of what was already true.
 | Names a slack that is not a bus | `ValueError: slack 'Z' is not a bus in [...]` | Clean, and kept — `slack=` is an assertion by the caller |
 | Deletes the bus the *config* names as slack | Falls back to the first bus, and reports it | New at W1 — see below |
 | Adds a branch with zero reactance | `ValueError: reactance_pu must be > 0` at `Branch.__post_init__` | Clean, caught at construction |
+| Drags a line rating to 0 | `ValueError: limit override for DE: limit_mw must be > 0` at `clearing.py` | Fixed at W3.8. The override skips `Branch`, so it restates `Branch`'s rule. At 0 it used to solve: μ[DE] = $13,527.99 with `loading` printing 0.0, because a zero rating divides into the flow |
 | Duplicates a bus or branch name | `ValueError` at `Scenario.__post_init__` | Clean |
 | Adds a bus with no generator and no load | Prices correctly. The bus gets a real LMP | **Not a bug.** Do not "fix" |
 | Adds a second line between two buses | Solves correctly | **Not a bug.** Parallel lines are physical |

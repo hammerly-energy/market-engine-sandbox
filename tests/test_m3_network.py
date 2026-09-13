@@ -715,6 +715,39 @@ class TestClearEntryPoint:
         with pytest.raises(ValueError, match="unknown line"):
             clear(build_scenario(CONFIG), limits={"NOPE": 100.0})
 
+    @pytest.mark.parametrize("rating", [0.0, -1.0, float("nan")])
+    def test_a_rating_that_is_not_positive_is_refused(self, rating):
+        """The override never passes through Branch, so it restates its rule.
+
+        Branch.__post_init__ refuses limit_mw <= 0 at construction, and the
+        override is a rating that skips it -- it is an argument to clear(),
+        not an edit to the Scenario. Each of the three gets there a different
+        way and none of them is displayable, measured on w1.yaml at hour 18:
+
+            0 MW    solves, mu[DE] = $13,527.99, and line_loading divides by
+                    the zero rating and reports 0.0. The flows panel prints
+                    an idle line beside the largest dual in the repo.
+            -1 MW   RuntimeError: solve not optimal: infeasible.
+            nan     ValueError from Pyomo, naming mu_up[DE,0].
+
+        The refusal is a ValueError, which the API turns into a named
+        invalid_scenario 422 with this sentence in it.
+        """
+        with pytest.raises(ValueError, match="must be > 0"):
+            clear(build_scenario(CONFIG), limits={"DE": rating})
+
+    def test_an_infinite_rating_override_is_allowed(self):
+        """inf is a rating and 0 is not, which is Branch's rule exactly.
+
+        An unlimited line is a modelling choice this repo uses deliberately --
+        four of case5's six branches carry .inf -- so the check that stops 0
+        must not stop inf on its way past.
+        """
+        cleared = clear(build_scenario(CONFIG), limits={"DE": float("inf")})
+        t = cleared["hours"][0]
+        assert binding_lines(cleared, t) == set()
+        assert cleared["loading"]["DE", t] == 0.0
+
     def test_slack_choice_moves_prices_by_a_constant(self):
         """CLAUDE.md trap 2, asserted at the entry point.
 

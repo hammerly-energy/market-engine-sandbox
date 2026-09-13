@@ -52,6 +52,14 @@ const LIMIT_STEP_MW = 5;
 const LIMIT_CEILING_MW = 1000;
 const LIMIT_INF_POS = LIMIT_CEILING_MW + LIMIT_STEP_MW;
 
+/* The track starts at one step, not at zero. A rating of 0 MW is refused by
+   clear() -- it is Branch's rule, that a line able to carry nothing should be
+   deleted rather than rated -- so a slider reaching it would put an error
+   message at the end of a lever's travel. The engine's refusal stays as the
+   check that catches this floor going missing; it is not the thing the
+   visitor is meant to meet. */
+const LIMIT_FLOOR_MW = LIMIT_STEP_MW;
+
 /* Generator capacity. case5's largest unit is E1 at 600 MW; the top of
    the range sits above it so the biggest unit is not pinned at the end. */
 const PMAX_MAX_MW = 700;
@@ -212,7 +220,8 @@ function group(title, note = null) {
  */
 
 function limitToPos(mw) {
-  return mw === UNLIMITED ? LIMIT_INF_POS : Math.min(mw, LIMIT_CEILING_MW);
+  if (mw === UNLIMITED) return LIMIT_INF_POS;
+  return Math.min(Math.max(mw, LIMIT_FLOOR_MW), LIMIT_CEILING_MW);
 }
 
 function posToLimit(pos) {
@@ -379,7 +388,7 @@ export function mountLevers(root, state, { onEdit, onHour }) {
   for (const [line, branch] of Object.entries(state.branches)) {
     const s = slider({
       name: line,
-      min: 0,
+      min: LIMIT_FLOOR_MW,
       max: LIMIT_INF_POS,
       step: LIMIT_STEP_MW,
       value: limitToPos(state.limits[line] ?? branch.limit_mw),

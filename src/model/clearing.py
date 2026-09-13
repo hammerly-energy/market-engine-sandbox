@@ -131,7 +131,32 @@ def clear(scenario, slack=None, limits=None):
         unknown = set(limits) - set(Fmax)
         if unknown:
             raise ValueError(f"limit override for unknown line(s) {sorted(unknown)}")
-        Fmax.update({l: float(v) for l, v in limits.items()})
+        # The override is a rating and is held to the rating rule, which is
+        # Branch.__post_init__'s: strictly positive, inf allowed. It has to be
+        # restated here because the override never passes through Branch --
+        # it is an argument to clear(), not an edit to the Scenario -- so
+        # until W3.8 the one field the UI hands the engine most often was the
+        # one field nothing checked. Measured on w1.yaml at hour 18:
+        #
+        #     0 MW    solves. mu[DE] = $13,527.99, D prices at the $5000 cap
+        #             and E at -$1499.55, while f = 7.1e-15 and line_loading
+        #             reports 0.0 because it divides by a zero rating. So the
+        #             panel prints an idle line next to the largest dual in
+        #             the repo.
+        #     -1 MW   RuntimeError: solve not optimal: infeasible.
+        #     nan     ValueError from Pyomo naming mu_up[DE,0], a sentence
+        #             about a constraint index rather than about a rating.
+        #
+        # `not (v > 0)` catches all three, nan included, and inf passes.
+        checked = {}
+        for l, v in limits.items():
+            v = float(v)
+            if not v > 0:
+                raise ValueError(
+                    f"limit override for {l}: limit_mw must be > 0, got {v}"
+                )
+            checked[l] = v
+        Fmax.update(checked)
 
     gen_bus = {g.name: g.bus for g in scenario.generators}
 
