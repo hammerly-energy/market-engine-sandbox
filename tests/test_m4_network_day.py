@@ -307,9 +307,10 @@ class TestForever:
 class TestProfileLoadSource:
     """The config idiom M4 introduces: peak_mw x shape.
 
-    Written at M4 because M4 is where it appears, but the guards matter most
-    later -- RTS-GMLC uses the same shape (an area profile times a bus
-    participation factor) at M5, with 73 buses instead of three to eyeball.
+    Written at M4 because M4 is where it appears. The guards matter most on
+    a network too big to eyeball: an area profile times a per-bus
+    participation factor is how load is shaped at any scale, and a shape that
+    silently rescales every bus is invisible past a handful of them.
     """
 
     def test_shape_must_peak_at_one(self):

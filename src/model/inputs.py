@@ -88,8 +88,9 @@ class Branch:
 class Generator:
     """An offer: a price and a quantity, located at a bus.
 
-    cost_usd_per_mwh is a single marginal cost, not yet a curve. It becomes
-    fuel_price * heat_rate + VOM at M5 and a real ERCOT offer curve later.
+    cost_usd_per_mwh is a single marginal cost, not a curve. The upgrade
+    path is a cost proxy, fuel_price * heat_rate + VOM, and a real ERCOT offer
+    curve past that.
     pmin_mw is carried but not enforced -- an LP has no way to honour it
     (trap 4), which is the whole reason M6 exists.
     """

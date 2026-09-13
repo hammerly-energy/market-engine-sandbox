@@ -63,9 +63,9 @@ def capacity(Pmax, g, t):
     or a hydro schedule needs. Both live in the same argument because to the LP
     they are the same thing: a number on the right of p[g,t] <= .
 
-    This is the ONLY coupling M5 adds, and it is not a coupling between hours.
-    An hourly cap still constrains each hour independently, so the block
-    diagonal structure M1 established survives intact. What breaks separability
+    An hourly cap is the one thing this argument adds, and it is not a
+    coupling between hours. It still constrains each hour independently, so
+    the block diagonal structure M1 established survives intact. What breaks separability
     is a constraint that spans two t -- ramping, min up time, state of charge --
     and none of those are here yet.
     """

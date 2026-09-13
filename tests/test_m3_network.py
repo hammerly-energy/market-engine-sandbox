@@ -3,7 +3,8 @@ r"""M3 network tests: incidence, susceptance, PTDF, and the nodal clearing.
 Everything here is hand-checkable. The point of M3 is that exactly one new
 failure surface opens -- the network -- so these tests pin the linear algebra
 down before an LP is ever asked to trust it. A transposed row or a flipped
-sign caught here is an afternoon; caught at M5 it is an inexplicable LMP.
+sign caught here is an afternoon; caught on a bigger network it is an
+inexplicable LMP.
 
 Three reference networks, chosen because each has an answer you can write
 down without a computer:
@@ -21,9 +22,9 @@ down without a computer:
        \        \
         ---- C ----
 
-TestNetworkInvariants holds forever. b_bus stays symmetric and singular at
-M5, at M8, and on any network anyone ever hands this repo -- those are
-properties of the DC formulation, not of case5.
+TestNetworkInvariants holds forever. b_bus stays symmetric and singular on
+any network anyone ever hands this repo -- those are properties of the DC
+formulation, not of case5.
 
 TestCase5Transcription is the provenance guard. configs/m3.yaml is a
 hand-typed view of tests/fixtures/case5.m, and MATPOWER numbers buses while
@@ -410,8 +411,8 @@ def _clear(limits="config"):
 class TestClearingInvariants:
     """Holds forever, on any network, congested or not.
 
-    These are the properties M5 will run on RTS-GMLC and M6 will run with
-    binaries fixed. Nothing here mentions case5's numbers.
+    Nothing here mentions case5's numbers. They are properties of the
+    formulation and hold on whatever network it is handed.
     """
 
     @pytest.mark.parametrize("limits", ["none", "config"])
@@ -854,7 +855,7 @@ class TestBranchValidation:
 
     Written at M3 because M3 is where Branch stops being a placeholder, but
     nothing here is about case5 or about the DC model specifically. They stay
-    true at M5 on RTS-GMLC and at M8 on a real fleet.
+    true on any network and any fleet.
     """
 
     def _branch(self, **kw):
