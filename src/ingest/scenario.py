@@ -3,7 +3,7 @@
 This sits on the ingest side of the boundary described in src/model/inputs.py.
 Something has to hold a config path in one hand and an API key in the other;
 putting it here keeps that knowledge out of src/model/ entirely, and keeps any
-single ingest module (eia930, rts_gmlc, ...) from having to know what a
+single ingest module (eia930, ...) from having to know what a
 Scenario is.
 
     configs/m2.yaml ---+
@@ -127,7 +127,7 @@ def _loads_profile(spec):
     Hours are the integers 0..23, as at M1. Not UTC strings: case5 is a
     textbook network with no location and no clock, and stamping a timezone on
     it would make a fabricated instant look like ingested data. The UTC
-    discipline belongs to real sources, and it arrives with RTS-GMLC at M5.
+    discipline belongs to real sources -- eia930.py is where it is kept.
     """
     shape = _shape(spec)
     peak = spec["peak_mw"]

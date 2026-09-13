@@ -15,8 +15,8 @@ description: >
   can produce at most one binding constraint at a time, and with a single
   binding line every LMP is bracketed between the cheapest and the dearest
   offer -- see the note at the end of configs/m3.yaml. Several lines binding at
-  once, and the prices outside the offer range that come with it, is M5 on
-  RTS-GMLC.
+  once, and the prices outside the offer range that come with it, needs a
+  bigger network than this one.
 
   The network and fleet blocks below are copied verbatim from configs/m3.yaml.
   That duplication is deliberate -- a config is fully declarative and standing
@@ -97,7 +97,7 @@ fleet:
 #
 # Hours are 0..23, as at M1. No timezone: case5 is a textbook network with no
 # location and no clock, and a fabricated UTC stamp would look like ingested
-# data. UTC discipline belongs to real sources and arrives with RTS-GMLC at M5.
+# data. UTC discipline belongs to real sources; eia930.py is where it is kept.
 #
 # The shape is synthetic, and its one job is to cross the congestion threshold.
 # Solved at m3's fleet, the DE corridor starts binding between 650 and 700 MW

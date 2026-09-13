@@ -193,7 +193,6 @@ market-engine-sandbox/
 │   │   ├── eia930.py
 │   │   ├── eia_fuels.py
 │   │   ├── nrel_profiles.py
-│   │   ├── rts_gmlc.py
 │   │   └── actuals.py       gridstatus pulls, HELD OUT from model inputs
 │   ├── network/
 │   │   ├── topology.py      buses, branches, susceptance matrix
@@ -1078,7 +1077,7 @@ early rather than at day nine.
 
 | Input | Source |
 |---|---|
-| Network + fleet + profiles | RTS-GMLC (NREL, GitHub) — primary test system |
+| Network + fleet + profiles | RTS-GMLC (NREL, GitHub). The ingest for it was written and **deleted at W3.8** — M5 is not pursued, it had no caller, no test and no data under `data/raw/`, and a parser for a 73-bus system the engine never solved implied a milestone that is not here. `git show c56006a:src/ingest/rts_gmlc.py` |
 | Small test networks | MATPOWER cases (case14, case118) |
 | Hourly load | EIA-930 Hourly Grid Monitor, API v2 |
 | Fuel prices | EIA API v2 (Henry Hub, SoCal Citygate, Waha) |

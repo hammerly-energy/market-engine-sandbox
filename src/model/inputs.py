@@ -15,7 +15,7 @@ is a claim worth being able to see rather than an omission.
 
               ingest/                     |            model/
     EIA-930 --> parse --> validate --> Scenario --> dispatch --> duals
-    RTS-GMLC ->  ...  -->   ...    -->    ^
+    a config ->  ...  -->   ...    -->    ^
                                           |
                         the boundary. one direction only.
 """
