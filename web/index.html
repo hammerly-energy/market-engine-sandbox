@@ -12,7 +12,7 @@
     <p class="subhead">
       Nodal DC clearing. LP dispatch, duals as prices. Five synthetic
       generators on a five-bus case. No unit commitment, no storage, no
-      reserves, no validation against real prices.
+      reserves, no losses, no validation against real prices.
     </p>
   </header>
 
@@ -63,6 +63,7 @@
         <p class="note" id="hour-note">Waiting for the first solve…</p>
         <p class="note">
           The dashed line is λ, the same at every bus. The bar is congestion.
+          The DC approximation is lossless, so there is no third term.
         </p>
         <div id="split"></div>
         <p class="caption">
@@ -87,6 +88,8 @@
         <p class="caption">
           A cheap block left empty beside a full dearer one is congestion. Bids sit
           at the ceiling, not to scale: the offer cap is far above every offer.
+          The cap bounds an offer. With a line binding, a bus clears wherever
+          λ plus its congestion lands — above the cap, or below zero.
         </p>
       </section>
 

@@ -403,6 +403,31 @@ The site must not imply M5-M8 exist. No unit commitment, no storage, no
 reserves, no comparison against published prices. The fleet is five synthetic
 generators on a five-bus teaching case and the offers are cost-based.
 
+**Losses are on that list too, and they were missing from the page's until
+W3.9.** The scope line at the top of this file says DC approximation, which
+is lossless, and `LMP[i] = lambda + sum_l PTDF[l,i]*mu[l]` under *Core
+mechanics* carries a `[+ loss term]` that this repo never adds. A visitor
+reading two components and no statement that a third exists elsewhere is
+being left to assume the model has one. Trap 5 is the other half of the same
+fact and is about ERCOT rather than about this engine.
+
+**An LMP is not bounded by the offer cap, and the page has to say so.** The
+cap is a bound on a bid; an LMP is `lambda` plus a shadow price on a line,
+and the second term has no bound in either direction. Measured on
+`configs/w1.yaml` with the fleet at half capacity, `AB` rated 50 MW and `DE`
+240 MW:
+
+```
+    hour 19    LMP[B]   $6245.2763      against a $5000.00 bid cap
+               LMP[A]   -$327.3447
+               residual  0.0            the identity is untouched
+```
+
+Six of the twenty-four hours price some bus above the cap there. Clipping the
+LMP at the cap is the obvious-looking fix and it breaks the thing the repo
+rests on: add a 5 MW unit at B and pay it the clipped price, and the residual
+goes from `0.0` to **$6226.3815**. Disclose the range, do not clamp it.
+
 State that on the page, in the reader's path, not in a footer. The honest
 version is more impressive than the inflated one: a visitor who works in
 markets will spot a missing UC in thirty seconds, and the difference between

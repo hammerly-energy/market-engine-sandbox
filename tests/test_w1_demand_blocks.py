@@ -294,3 +294,91 @@ class TestElasticDemand:
         # demand went unserved.
         for g in cleared["gen_bus"]:
             assert cleared["gen_status"][g, PEAK_HOUR] == "at_max"
+
+
+class TestTheCapBoundsABidAndNotAPrice:
+    """An LMP runs past the offer cap, and clipping it breaks settlement.
+
+    The cap is a bound on what a buyer will pay. An LMP is lambda plus a
+    shadow price on a line, and the second term has no bound in either
+    direction -- nobody offered it, so nothing about an offer cap constrains
+    it. With the fleet at half capacity and both rated lines pulled in:
+
+        hour 19    LMP[B]   $6245.2763      against a $5000.00 bid cap
+                   LMP[A]   -$327.3447
+                   residual  0.0
+
+    Six of the twenty-four hours price some bus above the cap.
+
+    Clipping the LMP at the cap is the obvious-looking fix and it is why this
+    is a disclosure rather than a change. Prices are duals; a rule applied on
+    top of one stops it being the dual, and the settlement identity is what
+    notices. The page says the range instead (web/index.html, the merit
+    caption), which is the same position *Scope honesty* takes everywhere
+    else: name what is missing rather than paper over it.
+    """
+
+    CAP = 5000.0
+    HOUR = 19
+    SQUEEZE = {"AB": 50.0, "DE": 240.0}
+
+    def _squeezed(self, **fleet):
+        """m4's day with half the fleet, and both rated lines pulled in."""
+        config = load_config(W1_CONFIG)
+        for spec in config["fleet"].values():
+            spec["pmax_mw"] = spec["pmax_mw"] / 2
+        config["fleet"].update(fleet)
+        return scenario_from_config(config, origin="<test>")
+
+    @pytest.fixture(scope="class")
+    def squeezed(self):
+        return clear(self._squeezed(), slack="D", limits=self.SQUEEZE)
+
+    def test_a_bus_prices_above_the_cap(self, squeezed):
+        assert squeezed["lmp"]["B", self.HOUR] == pytest.approx(6245.2763, abs=1e-4)
+        assert squeezed["lmp"]["B", self.HOUR] > self.CAP
+
+    def test_and_another_prices_below_zero_in_the_same_hour(self, squeezed):
+        """Both directions, because the congestion term is unbounded either
+        way and a disclosure that named only the high end would be half true.
+        """
+        assert squeezed["lmp"]["A", self.HOUR] == pytest.approx(-327.3447, abs=1e-4)
+
+    def test_it_is_not_one_freak_hour(self, squeezed):
+        hours = [
+            t
+            for t in squeezed["hours"]
+            if max(squeezed["lmp"][b, t] for b in squeezed["buses"]) > self.CAP
+        ]
+        assert hours == [12, 13, 16, 17, 18, 19]
+
+    def test_the_identity_holds_at_the_price_the_engine_returned(self, squeezed):
+        for t in squeezed["hours"]:
+            assert squeezed["settlement"]["D", t]["residual"] == pytest.approx(
+                0.0, abs=1e-6
+            )
+
+    def test_and_breaks_if_the_price_is_clipped_at_the_cap(self):
+        """Why this is disclosed and not fixed, as a number rather than an
+        argument.
+
+        A unit at B, so there is revenue at the over-cap bus to clip. Without
+        one the bid there is fully curtailed -- an LMP above a bid's value is
+        exactly why it goes unserved -- so payments at B are zero and the
+        clip costs nothing. The damage needs someone being paid.
+        """
+        cleared = clear(
+            self._squeezed(B1={"bus": "B", "cost_usd_per_mwh": 60.0, "pmax_mw": 5.0}),
+            slack="D",
+            limits=self.SQUEEZE,
+        )
+        t = self.HOUR
+        bus = cleared["gen_bus"]
+        at = lambda g: cleared["lmp"][bus[g], t]  # noqa: E731
+        revenue = sum(at(g) * cleared["dispatch"][g, t] for g in bus)
+        clipped = sum(min(at(g), self.CAP) * cleared["dispatch"][g, t] for g in bus)
+
+        rent = cleared["settlement"]["D", t]["rent_from_duals"]
+        payments = cleared["settlement"]["D", t]["payments"]
+        assert payments - revenue - rent == pytest.approx(0.0, abs=1e-6)
+        assert payments - clipped - rent == pytest.approx(6226.3815, abs=1e-4)
