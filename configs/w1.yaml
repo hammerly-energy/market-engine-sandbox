@@ -72,10 +72,12 @@ load:
      1.00, 0.98, 0.90, 0.78, 0.69, 0.58]   # 18-23  peak at hour 18, then decline
 
 notes: >
-  The demand-side FORMULATION is not written yet. This config carries priced
-  bids and src/model/dispatch.py still reads their total as a fixed
-  right-hand side, which is why the answer is identical to m4's today. The
-  two xfail tests in tests/test_w1_demand_blocks.py are the specification for
-  what changes when the LP learns to read the price: a bid valued below the
-  clearing price is curtailed, and a capacity shortfall becomes a price at the
-  cap instead of a RuntimeError.
+  The demand side is formulated. dispatch.py carries d as a variable and the
+  objective maximises welfare, so a bid valued below the clearing price is
+  curtailed and a capacity shortfall is a price at the cap rather than a
+  RuntimeError. The two tests in tests/test_w1_demand_blocks.py that specified
+  that behaviour as xfail now pass.
+
+  The answer here is still identical to m4's, and for the reason above rather
+  than because the price is ignored: every bid is valued at the offer cap,
+  which outbids every generator in the fleet.

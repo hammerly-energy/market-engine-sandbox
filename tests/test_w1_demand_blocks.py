@@ -22,9 +22,11 @@ control:
     demand is data          demand is a named bid at $5000
                             (and $5000 beats every offer, so it is all served)
 
-Two tests are marked xfail(strict=True). They are not broken; they are the
-statement of what the formulation must do, and they will XPASS -- and so fail
-the suite, loudly -- the moment it is written. Delete the marker then.
+Two tests were written as xfail(strict=True) before the formulation existed,
+as the statement of what it had to do. They xpassed the moment it landed and
+the markers came off. They are kept exactly as written, because the value of a
+test written first is that it was not shaped around the code that satisfies
+it.
 
 Grouped by lifespan. TestBitIdentity must hold forever: an elastic demand
 side that changes the answer for INELASTIC load is a bug, whatever else it

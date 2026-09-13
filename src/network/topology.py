@@ -57,7 +57,7 @@ def b_bus(buses, branches):
 
 
 def components(buses, branches):
-    """Connected components of the network, as a list of sorted bus-name lists.
+    """Connected components of the network, as a list of bus-name lists.
 
     A pure graph question -- reactance and limits play no part, only which
     buses a branch touches. Ordered by the bus order given, so the answer is

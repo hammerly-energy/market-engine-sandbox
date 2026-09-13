@@ -1,6 +1,8 @@
 """Power transfer distribution factors (shift factors), defined relative to a slack bus.
 
-Changing the slack shifts every LMP by a constant. Price differences are invariant."""
+Changing the slack moves lambda and moves no LMP at all. PTDF[l, slack] = 0,
+so lambda is the LMP at the slack, and that is the whole content of the choice
+(CLAUDE.md trap 2)."""
 
 import numpy as np
 
@@ -18,9 +20,18 @@ def ptdf(buses, branches, slack):
     makes a column mean something. Its own column is therefore exactly zero:
     inject at the slack, withdraw at the slack, nothing moves.
 
-    Changing the slack shifts every LMP by a constant. Dispatch, congestion
-    rent, and price DIFFERENCES are invariant; only the level of lambda moves
-    (CLAUDE.md trap 2). One slack per connected component -- case5 is one.
+    Changing the slack moves lambda and moves no LMP. This file said "shifts
+    every LMP by a constant" until the review at W3.8; the constant is zero,
+    and the loose version invites a UI that animates prices sliding when the
+    slack changes. They do not slide. Measured on case5, slack D against A:
+
+        lambda      moves $22.97
+        every LMP   moves at most 1.7e-13, which is the float64 debris of a
+                    cancellation at magnitudes around $30
+
+    Dispatch, flows, congestion rent and every settlement figure are invariant
+    with them (CLAUDE.md trap 2, which carries the full table). One slack per
+    connected component -- case5 is one.
 
     Args:
         buses: list of bus names. Fixes the column order.
