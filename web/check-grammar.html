@@ -106,7 +106,7 @@ press("Remove Item");
 clickMark(bus("E")); await wait();
 const after = cfg();
 check("the bus is gone", !after.network.buses.includes("E"));
-check("its generator went with it", !("brighton" in after.fleet));
+check("its generator went with it", !("E1" in after.fleet));
 check("its branches went with it",
   !Object.values(after.network.branches).some(b => b.from === "E" || b.to === "E"));
 

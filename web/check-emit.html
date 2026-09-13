@@ -73,7 +73,7 @@ check("an unlimited line is emitted as \"inf\", not null",
   emitted.network.branches.AD.limit_mw === "inf", String(emitted.network.branches.AD.limit_mw));
 check("a rated line keeps its number", emitted.network.branches.DE.limit_mw === 240.0);
 check("reactance is unrounded", emitted.network.branches.AB.reactance_pu === 0.0281);
-check("an offer keeps its cents", emitted.fleet.brighton.cost_usd_per_mwh === 10.0);
+check("an offer keeps its cents", emitted.fleet.E1.cost_usd_per_mwh === 10.0);
 check("the shape is 24 hours, in order",
   emitted.load.shape.length === 24 && emitted.load.shape[18] === 1.0);
 check("firm bids carry the offer cap",

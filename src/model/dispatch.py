@@ -163,7 +163,7 @@ def solve_dispatch_network_day(c, Pmax, D, gen_bus, buses, PTDF, Fmax, islands,
     thing that makes it two is ONE BALANCE ROW PER COMPONENT:
 
         A ---- B ---- C        E        sum_g p == sum_i D   one row
-                                        lets brighton at E serve B's load
+                                        lets E1 at E serve B's load
         (the line to E is cut)          through a line that is not there
 
     So the balance is indexed by island, and lambda comes back keyed by

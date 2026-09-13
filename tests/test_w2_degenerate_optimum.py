@@ -7,13 +7,13 @@ bottom of this file.
 
     configs/w1.yaml, both line limits removed, hour 8
 
-Hour 8's load lands exactly on 40 + 170 + 600 = 810 MW -- alta, park_city and
-brighton's capacities summed. No generator is left strictly between its bounds,
+Hour 8's load lands exactly on 40 + 170 + 600 = 810 MW -- A1, A2 and
+E1's capacities summed. No generator is left strictly between its bounds,
 so no offer is the price, and the market clears at any lambda in [15, 30]: at
-every one of those prices the same three units run flat out and solitude stays
+every one of those prices the same three units run flat out and C1 stays
 off. The solver returns 15.0000 and says nothing about the other end.
 
-Hour 7 is the control. Same config, same solve, 730 MW, park_city part-loaded
+Hour 7 is the control. Same config, same solve, 730 MW, A2 part-loaded
 at 90 of 170, and lambda = 15 is the only answer.
 
 What this fixture CANNOT do, measured rather than assumed: flake the slack
@@ -38,12 +38,12 @@ from src.model.clearing import clear
 W1_CONFIG = "configs/w1.yaml"
 
 BREAKPOINT_HOUR = 8      # load lands exactly on 810 MW
-CONTROL_HOUR = 7         # 730 MW, park_city part-loaded
+CONTROL_HOUR = 7         # 730 MW, A2 part-loaded
 
 TIED_HOURS = [20, 21]    # of the tied fixture below: two units interior at $25
 
-LOWER = 15.0             # park_city's offer, the left slope of the cost curve
-UPPER = 30.0             # solitude's offer, the right slope
+LOWER = 15.0             # A2's offer, the left slope of the cost curve
+UPPER = 30.0             # C1's offer, the right slope
 
 
 def _unlimited(scenario):
@@ -106,7 +106,7 @@ class TestTheBreakpointHourIsDegenerate:
             cleared["served"][b, BREAKPOINT_HOUR]
             for b in {name for name, _ in cleared["served"]}
         )
-        running = ["alta", "park_city", "brighton"]
+        running = ["A1", "A2", "E1"]
         assert served == pytest.approx(sum(cleared["gen_pmax"][g] for g in running))
         assert served == pytest.approx(810.0)
 
@@ -114,19 +114,19 @@ class TestTheBreakpointHourIsDegenerate:
         basic, rows = _counts(cleared, BREAKPOINT_HOUR)
         assert (basic, rows) == (0, 1)
 
-    def test_park_city_is_full_and_indifferent_at_once(self, cleared):
+    def test_a2_is_full_and_indifferent_at_once(self, cleared):
         # The case reduced_costs() documents: at_max with a reduced cost of
         # zero is not a contradiction, it is the breakpoint.
-        assert cleared["gen_status"]["park_city", BREAKPOINT_HOUR] == "at_max"
-        assert cleared["reduced_cost"]["park_city", BREAKPOINT_HOUR] == pytest.approx(0.0)
+        assert cleared["gen_status"]["A2", BREAKPOINT_HOUR] == "at_max"
+        assert cleared["reduced_cost"]["A2", BREAKPOINT_HOUR] == pytest.approx(0.0)
 
 
 class TestTheControlHourIsNot:
     """What the W3 flag has to return false for, one hour away in one solve."""
 
-    def test_park_city_is_part_loaded(self, cleared):
-        assert cleared["gen_status"]["park_city", CONTROL_HOUR] == "interior"
-        assert cleared["dispatch"]["park_city", CONTROL_HOUR] == pytest.approx(90.0)
+    def test_a2_is_part_loaded(self, cleared):
+        assert cleared["gen_status"]["A2", CONTROL_HOUR] == "interior"
+        assert cleared["dispatch"]["A2", CONTROL_HOUR] == pytest.approx(90.0)
 
     def test_one_variable_sets_the_one_row(self, cleared):
         assert _counts(cleared, CONTROL_HOUR) == (1, 1)
@@ -140,8 +140,8 @@ class TestTheIntervalIsFifteenToThirty:
     total cost curve either side of the kink.
 
     Scaling every bid walks the load across 810 MW. Below the breakpoint
-    park_city is part-loaded and the next MW costs its offer; above it,
-    solitude is, and the next MW costs 30. At 810 the curve has a corner and
+    A2 is part-loaded and the next MW costs its offer; above it,
+    C1 is, and the next MW costs 30. At 810 the curve has a corner and
     the supporting slopes are the whole closed interval between them.
 
     W2.9 deferred PRINTING this interval to W4. The measurement is here so
@@ -268,11 +268,11 @@ class TestTheOtherDegeneracyIsADifferentSentence:
         """
         out = copy.deepcopy(config)
         offers = {
-            "alta": (25.0, 100.0),
-            "park_city": (25.0, 600.0),
-            "solitude": (10.0, 40.0),
-            "sundance": (30.0, 40.0),
-            "brighton": (25.0, 520.0),
+            "A1": (25.0, 100.0),
+            "A2": (25.0, 600.0),
+            "C1": (10.0, 40.0),
+            "D1": (30.0, 40.0),
+            "E1": (25.0, 520.0),
         }
         for name, (cost, pmax) in offers.items():
             out["fleet"][name]["cost_usd_per_mwh"] = cost

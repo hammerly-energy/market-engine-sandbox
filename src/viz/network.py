@@ -92,14 +92,6 @@ def _title(ax, letter, text):
     ax.set_title(f"({letter}) {text}", loc="left", fontsize=10.5, color=INK, pad=8)
 
 
-def _display(name):
-    """Config key -> display name. park_city -> Park City.
-
-    configs/m3.yaml keys are snake_case because they are dict keys; its prose
-    calls the units Brighton and Park City. Figures follow the prose.
-    """
-    return name.replace("_", " ").title()
-
 
 def _cell(value, fmt):
     """Exact zero prints as a bare 0. A signed +0.00 reads as a rounded value."""
@@ -194,13 +186,13 @@ def _panel_offer_stack(ax, buses, fleet, total_load):
     for g in order:
         ax.bar(left, g["cost"], width=g["pmax"], align="edge", bottom=0,
                color=hue[g["bus"]], edgecolor=SURFACE, linewidth=0.8, zorder=2)
-        # Inside the block, not above it. Above, alta's 40 MW step is too
-        # narrow to hold a label without running into park_city's, and
-        # solitude's lands on the load line. A block narrower than its own
+        # Inside the block, not above it. Above, A1's 40 MW step is too
+        # narrow to hold a label without running into A2's, and
+        # C1's lands on the load line. A block narrower than its own
         # label turns the label upright rather than shrinking it -- the type
         # scale is fixed, so collisions are resolved by moving text.
         ax.text(left + g["pmax"] / 2, g["cost"] / 2,
-                f"{_display(g['name'])} ({g['bus']})",
+                f"{g['name']} ({g['bus']})",
                 ha="center", va="center", rotation=90 if g["pmax"] < 250 else 0,
                 fontsize=8.5, color=_ink_on(hue[g["bus"]]), zorder=5)
         left += g["pmax"]
@@ -462,7 +454,7 @@ def _panel_redispatch(ax, fleet, merit, cleared, buses):
     hue = dict(zip(buses, BUS_HUE))
     order = sorted(fleet, key=lambda g: cleared[g["name"]] - merit[g["name"]])
     delta = [cleared[g["name"]] - merit[g["name"]] for g in order]
-    names = [_display(g["name"]) for g in order]
+    names = [g["name"] for g in order]
     y = np.arange(len(order))
 
     ax.barh(y, delta, color=[hue[g["bus"]] for g in order],
@@ -545,7 +537,7 @@ def _panel_revenue(ax, buses, fleet, dispatch, lmp):
     """
     hue = dict(zip(buses, BUS_HUE))
     order = sorted(fleet, key=lambda g: -dispatch[g["name"]])
-    names = [_display(g["name"]) for g in order]
+    names = [g["name"] for g in order]
 
     for i, g in enumerate(order):
         mw, price = dispatch[g["name"]], lmp[g["bus"]]
@@ -709,7 +701,7 @@ if __name__ == "__main__":
     for g in fleet:
         n = g["name"]
         lines_out.append(
-            f"    {_display(n):<12} {g['bus']}  {feasible[n]:8.2f} / {g['pmax']:6.0f} MW"
+            f"    {n:<12} {g['bus']}  {feasible[n]:8.2f} / {g['pmax']:6.0f} MW"
             f"   @ ${g['cost']:5.2f}   paid ${lmp[g['bus']]:6.2f}"
         )
     lines_out += ["", "  Line flows"]

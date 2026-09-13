@@ -102,10 +102,6 @@ def _hours(ax, hours):
     ax.set_axisbelow(True)
 
 
-def _display(name):
-    """Config key -> display name. park_city -> Park City."""
-    return name.replace("_", " ").title()
-
 
 def _lighten(hex_color, amount):
     """Mix a hue toward the surface. amount 0 keeps it, 1 erases it."""
@@ -119,7 +115,7 @@ def _unit_hues(fleet, buses):
     """{generator: colour}. Hue by BUS, lightness by unit within that bus.
 
     Colour carries location, because location is what the network prices. But
-    case5 puts Alta and Park City at the same bus, and two identical blues
+    case5 puts A1 and A2 at the same bus, and two identical blues
     stacked on each other read as one band with a stray white line through it.
     So the second and subsequent units at a bus are mixed toward the surface,
     which keeps "bus A is blue" true while making the two units separable --
@@ -261,7 +257,7 @@ def _panel_stack(ax, hours, fleet, dispatch, buses, congested):
     ax.set_ylim(0, top)
 
     # Direct-label a band only where it is thick enough ON THE AXIS to hold
-    # text. Alta is 40 MW in a 1,000 MW stack: measured against its own height
+    # text. A1 is 40 MW in a 1,000 MW stack: measured against its own height
     # it looks labellable, and measured against the page it is a sliver. The
     # legend is what carries the thin ones.
     mid = len(hours) // 2
@@ -269,7 +265,7 @@ def _panel_stack(ax, hours, fleet, dispatch, buses, congested):
         base, band = bands[g["name"]]
         if band[mid] > top * 0.09:
             ax.text(hours[mid], base[mid] + band[mid] / 2,
-                    f"{_display(g['name'])} ({g['bus']})", ha="center",
+                    f"{g['name']} ({g['bus']})", ha="center",
                     va="center", fontsize=8.5, color=SURFACE, zorder=5)
 
     _bare(ax)
@@ -279,10 +275,10 @@ def _panel_stack(ax, hours, fleet, dispatch, buses, congested):
     _title(ax, "a", "Dispatch by Unit, Stacked in Merit Order")
 
     # Every unit in the fleet, in merit order, including any that never runs.
-    # Sundance at $40 is never reached on this day, and a legend entry with no
+    # D1 at $40 is never reached on this day, and a legend entry with no
     # band next to it says that more clearly than its absence would.
     handles = [Patch(facecolor=hue[g["name"]], edgecolor=SURFACE, lw=0.8,
-                     label=f"{_display(g['name'])} ({g['bus']})") for g in order]
+                     label=f"{g['name']} ({g['bus']})") for g in order]
     leg = ax.legend(handles=handles, loc="upper left", frameon=False,
                     fontsize=8.5, ncol=2, handlelength=1.1,
                     columnspacing=1.0, borderpad=0.2, labelspacing=0.35)
@@ -408,13 +404,13 @@ def _panel_offer_band(ax, buses, fleet, trough, peak):
     This is the stack with NO network -- the order a single-bus solve would
     follow. It is drawn first and on its own precisely so the later figures
     have something to contradict: the day never actually dispatches this way,
-    because the DE corridor stops Brighton short of what its offer entitles it
+    because the DE corridor stops E1 short of what its offer entitles it
     to. The gap between this panel and panel (a) of the dispatch figure is the
     whole of M3 and M4 in one comparison.
 
     M3's version of this panel marks a single load. A day has a range, so the
     line becomes a band, and what the band shows is which offers the day
-    reaches into at all. Sundance sits entirely to the right of it and never
+    reaches into at all. D1 sits entirely to the right of it and never
     runs -- not because the network forbids it, but because the day never gets
     that expensive.
     """
@@ -434,7 +430,7 @@ def _panel_offer_band(ax, buses, fleet, trough, peak):
         # collision is resolved by turning or moving the label, never by
         # shrinking it.
         ax.text(left + g["pmax"] / 2, g["cost"] / 2,
-                f"{_display(g['name'])} ({g['bus']})",
+                f"{g['name']} ({g['bus']})",
                 ha="center", va="center", rotation=90 if g["pmax"] < 250 else 0,
                 fontsize=8.5, color=_ink_on(hue[g["bus"]]), zorder=5)
         left += g["pmax"]

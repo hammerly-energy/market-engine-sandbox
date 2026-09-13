@@ -65,15 +65,26 @@ network:
 # gencost row is model 2, n = 2, so the offer is a single $/MWh slope with no
 # no-load term -- exactly the shape src/model/inputs.py already carries.
 #
-# Brighton is the cheapest unit in the fleet AND the furthest from load. That
+# E1 is the cheapest unit in the fleet AND the furthest from load. That
 # is the whole design of the case: unconstrained it displaces everything, and
 # the corridor out of E is what stops it.
+#
+# The names are the bus each unit sits on and its rank there, so a name says
+# where a unit is -- which the web editor needs, because a generator mark on
+# the map is too small to label and the name is the only place its bus is
+# written. MATPOWER's case5 and the PJM 5-bus write-up call them:
+#
+#     A1  alta        A2  park_city     C1  solitude
+#     D1  sundance    E1  brighton
+#
+# Recorded here rather than lost in the rename, because that write-up is what
+# the LMPs below are checked against.
 fleet:
-  alta:      {bus: A, cost_usd_per_mwh: 14.0, pmax_mw:  40.0}
-  park_city: {bus: A, cost_usd_per_mwh: 15.0, pmax_mw: 170.0}
-  solitude:  {bus: C, cost_usd_per_mwh: 30.0, pmax_mw: 520.0}
-  sundance:  {bus: D, cost_usd_per_mwh: 40.0, pmax_mw: 200.0}
-  brighton:  {bus: E, cost_usd_per_mwh: 10.0, pmax_mw: 600.0}
+  A1: {bus: A, cost_usd_per_mwh: 14.0, pmax_mw:  40.0}
+  A2: {bus: A, cost_usd_per_mwh: 15.0, pmax_mw: 170.0}
+  C1: {bus: C, cost_usd_per_mwh: 30.0, pmax_mw: 520.0}
+  D1: {bus: D, cost_usd_per_mwh: 40.0, pmax_mw: 200.0}
+  E1: {bus: E, cost_usd_per_mwh: 10.0, pmax_mw: 600.0}
 
 # ----------------------------------------------------------------------- load
 # mpc.bus Pd. Static, not EIA-930: M3 changes the network, and holding the
@@ -92,12 +103,12 @@ notes: >
   Confirmed by tests/test_m3_network.py, not assumed.
 
   Uncongested (both limits raised to .inf) the case reduces to a merit order
-  stack: Brighton 600, Park City 170, Alta 40, Solitude 190, so lambda is $30
+  stack: E1 600, A2 170, A1 40, C1 190, so lambda is $30
   at every bus. Verify that BEFORE imposing a limit -- it is the test that
   separates a topology bug from a pricing bug.
 
-  Congested, DE binds at 240 MW and nothing else does. Brighton backs down to
-  466.51 and Solitude comes up to 323.49, matching MATPOWER's own OPF answer
+  Congested, DE binds at 240 MW and nothing else does. E1 backs down to
+  466.51 and C1 comes up to 323.49, matching MATPOWER's own OPF answer
   in the Pg column of tests/fixtures/case5.m. lambda is $39.94 and mu[DE] is
   $62.32, giving
 

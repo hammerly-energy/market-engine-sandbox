@@ -52,7 +52,7 @@ const LIMIT_STEP_MW = 5;
 const LIMIT_CEILING_MW = 1000;
 const LIMIT_INF_POS = LIMIT_CEILING_MW + LIMIT_STEP_MW;
 
-/* Generator capacity. case5's largest unit is brighton at 600 MW; the top of
+/* Generator capacity. case5's largest unit is E1 at 600 MW; the top of
    the range sits above it so the biggest unit is not pinned at the end. */
 const PMAX_MAX_MW = 700;
 const PMAX_STEP_MW = 10;
@@ -397,7 +397,11 @@ export function mountLevers(root, state, { onEdit, onHour }) {
   }
   root.append(lines);
 
-  /* ---- generators: capacity and offer, two levers on one unit. */
+  /* ---- generators: capacity and offer, two levers on one unit.
+   *
+   * The label is the name alone. It used to carry the bus after it -- "A1
+   * (A) capacity" -- because a place name said nothing about where the unit
+   * was. A1 does, so the suffix became the same letter twice. */
   const fleet = group(
     "Generators",
     "Capacity and the offer each unit is dispatched against. Offers are " +
@@ -406,7 +410,7 @@ export function mountLevers(root, state, { onEdit, onHour }) {
   );
   for (const [name, gen] of Object.entries(state.fleet)) {
     const cap = slider({
-      name: `${name} (${gen.bus}) capacity`,
+      name: `${name} capacity`,
       min: 0,
       max: PMAX_MAX_MW,
       step: PMAX_STEP_MW,
@@ -418,7 +422,7 @@ export function mountLevers(root, state, { onEdit, onHour }) {
       },
     });
     const cost = slider({
-      name: `${name} (${gen.bus}) offer`,
+      name: `${name} offer`,
       min: 0,
       max: COST_MAX_USD,
       step: COST_STEP_USD,

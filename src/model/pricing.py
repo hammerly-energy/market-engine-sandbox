@@ -89,7 +89,7 @@ def generator_status(res, Pmax, tol=1e-6):
     units under the name "marginal" and so made a price claim out of a
     dispatch test. The two are not the same question, and case5 at its peak
     hour shows the gap in both directions: two units are interior at once
-    (DE binds, so E is its own pricing region and Brighton and Solitude each
+    (DE binds, so E is its own pricing region and E1 and C1 each
     set their own bus's price), while three of five buses have an LMP equal to
     no offer at all, because a congested bus is priced by a combination the
     PTDF assembles and not by any single machine.
@@ -197,8 +197,8 @@ def price_uniqueness(
 
     The two directions are different sentences and do not collapse into one
     "degenerate" flag. Measured on case5 with every offer at $25 and both
-    limits removed: lambda is 25 under slack A and slack C alike, while alta
-    and park_city sit off at a reduced cost of zero and could swap in at no
+    limits removed: lambda is 25 under slack A and slack C alike, while A1
+    and A2 sit off at a reduced cost of zero and could swap in at no
     cost. The price was never in doubt there; the dispatch was.
 
     Nothing here solves anything. Every input is a field clear() already

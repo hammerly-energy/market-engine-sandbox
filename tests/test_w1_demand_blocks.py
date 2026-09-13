@@ -257,7 +257,7 @@ class TestElasticDemand:
     def test_a_bid_below_the_clearing_price_is_not_served(self):
         """Demand response, with no code path of its own.
 
-        A 100 MW bid at $5/MWh sits below Brighton's $10 offer, so it is never
+        A 100 MW bid at $5/MWh sits below E1's $10 offer, so it is never
         worth serving. Total dispatch must therefore be m4's, not m4's plus
         100 -- the market declined the bid on price alone.
         """

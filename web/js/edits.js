@@ -65,14 +65,24 @@ export function nextBranchName(state, from, to) {
   }
 }
 
-/* Generators get g1, g2... and not a place name. The seeded fleet is named
-   after real units in the PJM 5-bus write-up; inventing a sixth place name
-   would put a unit on the page that reads as if it came from the same source
-   and did not. */
-export function nextGeneratorName(state) {
+/* A generator is named for the bus it sits on and its rank there -- A1, A2,
+   C1 -- which is the scheme the branches already use, one mark over.
+ *
+ * It replaces a global g1, g2 counter. The counter named a unit for the order
+ * it was created in, which is a fact about the session and not about the
+ * market: delete A2 and add a unit at E, and the old scheme called it g2 and
+ * put it next to a bus it had nothing to do with. The map has no room to
+ * label a generator square, so the name is the only place a reader learns
+ * where a unit is -- and every panel that prints a unit prints this name.
+ *
+ * Reusing the lowest free rank rather than counting up means adding and
+ * removing at one bus does not walk the numbers upward. The name is an
+ * identifier and never parsed, so a bus called B26 taking B261 is unique and
+ * that is all it has to be. */
+export function nextGeneratorName(state, bus) {
   const taken = new Set(Object.keys(state.fleet));
   for (let n = 1; ; n += 1) {
-    const name = `g${n}`;
+    const name = `${bus}${n}`;
     if (!taken.has(name)) return name;
   }
 }
@@ -176,7 +186,7 @@ export function cut(state, line) {
 /* -------------------------------------------------------------- generators */
 
 export function addGenerator(state, bus) {
-  const name = nextGeneratorName(state);
+  const name = nextGeneratorName(state, bus);
   state.fleet[name] = defaultGenerator(bus);
   return name;
 }

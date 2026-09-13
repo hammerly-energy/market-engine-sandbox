@@ -543,21 +543,21 @@ class TestTheLineLimitLeverIsAnArgumentAndNotAConfigEdit:
 
 class TestTheGeneratorLevers:
     def test_zero_capacity_stops_the_unit(self, client, seed):
-        out = _post(client, seed, fleet={"brighton": {"pmax_mw": 0.0}})
-        assert all(p == 0.0 for p in out["dispatch"]["brighton"])
+        out = _post(client, seed, fleet={"E1": {"pmax_mw": 0.0}})
+        assert all(p == 0.0 for p in out["dispatch"]["E1"])
 
     def test_capacity_comes_back_on_the_wire(self, client, seed):
         """gen_pmax and gen_cost are returned, so the merit-order stack of W3
         can be drawn without the browser holding a second copy of the fleet."""
-        out = _post(client, seed, fleet={"brighton": {"pmax_mw": 250.0}})
-        assert out["gen_pmax"]["brighton"] == 250.0
+        out = _post(client, seed, fleet={"E1": {"pmax_mw": 250.0}})
+        assert out["gen_pmax"]["E1"] == 250.0
 
     def test_raising_an_offer_above_the_next_unit_reprices_the_market(self, client, seed):
-        """brighton is the cheapest unit at $10. Offered above solitude's $30
+        """E1 is the cheapest unit at $10. Offered above C1's $30
         it stops being the marginal resource anywhere, and a price moves."""
         base = _post(client, seed)
-        dear = _post(client, seed, fleet={"brighton": {"cost_usd_per_mwh": 35.0}})
-        assert dear["gen_cost"]["brighton"] == 35.0
+        dear = _post(client, seed, fleet={"E1": {"cost_usd_per_mwh": 35.0}})
+        assert dear["gen_cost"]["E1"] == 35.0
         assert dear["lmp"] != base["lmp"]
 
     def test_an_offer_the_slider_can_reach_still_clears(self, client, seed):
@@ -588,7 +588,7 @@ class TestTheDemandLever:
         out = _post(
             client, seed, bids={b: {"peak_mw": 0.0} for b in seed["config"]["load"]["bids"]}
         )
-        assert all(p == 0.0 for p in out["dispatch"]["brighton"])
+        assert all(p == 0.0 for p in out["dispatch"]["E1"])
 
     def test_more_load_than_the_fleet_can_serve_sheds_rather_than_refusing(
         self, client, seed
@@ -887,9 +887,9 @@ class TestTheEditsThatChangeTheFleet:
 
     def test_removing_a_unit_reprices_rather_than_refusing(self, client, seed):
         base = _clear(client, seed["config"], seed["slack"])
-        config = _edited(seed, lambda c: c["fleet"].pop("brighton"))
+        config = _edited(seed, lambda c: c["fleet"].pop("E1"))
         out = _clear(client, config, seed["slack"])
-        assert "brighton" not in out["dispatch"]
+        assert "E1" not in out["dispatch"]
         assert out["lmp"] != base["lmp"]
         assert _settles(out)
 
@@ -935,7 +935,7 @@ class TestRemovingTheSlackBus:
             c["network"]["branches"].pop("AD"),
             c["network"]["branches"].pop("CD"),
             c["network"]["branches"].pop("DE"),
-            c["fleet"].pop("sundance"),
+            c["fleet"].pop("D1"),
             c["load"]["bids"].pop("D_firm"),
         ))
         # slack=None: the config still RECORDS D, which is now gone.
@@ -952,7 +952,7 @@ class TestRemovingTheSlackBus:
             c["network"]["branches"].pop("AD"),
             c["network"]["branches"].pop("CD"),
             c["network"]["branches"].pop("DE"),
-            c["fleet"].pop("sundance"),
+            c["fleet"].pop("D1"),
             c["load"]["bids"].pop("D_firm"),
         ))
         chosen = _clear(client, config, None)
@@ -1237,7 +1237,7 @@ class TestDeletingTheSlackIsNotAnErrorAndDeletingAnythingElseIsNotAMove:
             c["network"]["branches"].pop("AD"),
             c["network"]["branches"].pop("CD"),
             c["network"]["branches"].pop("DE"),
-            c["fleet"].pop("sundance"),
+            c["fleet"].pop("D1"),
             c["load"]["bids"].pop("D_firm"),
         ))
 
@@ -1254,7 +1254,7 @@ class TestDeletingTheSlackIsNotAnErrorAndDeletingAnythingElseIsNotAMove:
             c["network"]["buses"].remove("E"),
             c["network"]["branches"].pop("AE"),
             c["network"]["branches"].pop("DE"),
-            c["fleet"].pop("brighton"),
+            c["fleet"].pop("E1"),
         ))
         out = _clear(client, config, seed["slack"])
         assert out["slack"] == seed["slack"] == "D"

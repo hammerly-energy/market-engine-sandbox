@@ -109,8 +109,8 @@ export function stateFromSeed(seed) {
  *                  it is a deliberate move on the slider.
  *
  *   new generator  $25/MWh and 100 MW. The cost sits between case5's
- *                  cheapest offer ($10 brighton) and its dearest ($40
- *                  sundance), so a new unit is neither always in merit nor
+ *                  cheapest offer ($10 E1) and its dearest ($40
+ *                  D1), so a new unit is neither always in merit nor
  *                  never in it -- either extreme would make adding a
  *                  generator look like it did nothing.
  *

@@ -441,8 +441,8 @@ palette, in the same order.
 W3.2 left the square plain `--ink-2` on the grounds that a unit is dispatched
 rather than priced. That was correct while no view coloured a unit. The merit
 stack does, and it is the one view that prints a generator's name, so the
-square takes that unit's hue and a reader can carry `brighton` from the named
-block to a mark the map has no room to label. `genInk()` in `web/js/scales.js`
+square takes that unit's hue and a reader can carry `E1` from the named block
+to a mark the map has no room to label. `genInk()` in `web/js/scales.js`
 is the single definition both views read.
 
 The hue fills the square and `--ink-2` keeps the edge. Outlining in the hue
@@ -728,7 +728,7 @@ the constraint set only contains lines that exist.
   ────────────────────────────              ──────────────────
   Σ p  ==  Σ D                              Σ    p  ==  Σ    D      island 1
      ↑                                       g∈I₁         i∈I₁
-  brighton at E serves B's load             Σ    p  ==  Σ    D      island 2
+  E1 at E serves B's load                   Σ    p  ==  Σ    D      island 2
   through a line that isn't there            g∈I₂         i∈I₂
 ```
 
@@ -894,17 +894,17 @@ The degenerate case is reachable from the editor in one move. Measured on
 `configs/w1.yaml` with both line limits dragged to max, hour 8:
 
 ```
-   alta        p =  40.0 /  40.0   at_max     rc =   1.0000
-   park_city   p = 170.0 / 170.0   at_max     rc =   0.0000
-   solitude    p =   0.0 / 520.0   off        rc = -15.0000
-   sundance    p =   0.0 / 200.0   off        rc = -25.0000
-   brighton    p = 600.0 / 600.0   at_max     rc =   5.0000
+   A1   p =  40.0 /  40.0   at_max     rc =   1.0000
+   A2   p = 170.0 / 170.0   at_max     rc =   0.0000
+   C1   p =   0.0 / 520.0   off        rc = -15.0000
+   D1   p =   0.0 / 200.0   off        rc = -25.0000
+   E1   p = 600.0 / 600.0   at_max     rc =   5.0000
 
    λ = 15.0000
 ```
 
-Load lands exactly on 40 + 170 + 600 = 810 MW, and park_city is full and
-indifferent at once — the case `reduced_costs` already documents. The true
+Load lands exactly on 40 + 170 + 600 = 810 MW, and A2 is full and indifferent
+at once — the case `reduced_costs` already documents. The true
 answer is `λ ∈ [15, 30]`, and the total cost curve is where that is visible:
 sweeping the load at hour 8 gives a kink at 810, slope $15/MWh to its left and
 $30/MWh to its right, with λ equal to the slope on each side. A convex kink
@@ -956,8 +956,8 @@ curve above is a picture of the price ambiguity only, not of both.
 
 **The example this section used to give does not reach it, and W3.1 measured
 that rather than inheriting it.** Every offer set to $25 with both limits
-removed gives λ = 25 under slack A and slack C alike, with alta and park_city
-sitting *off* at `rc = 0.0000` and able to swap in at no cost — the dispatch
+removed gives λ = 25 under slack A and slack C alike, with A1 and A2 sitting
+*off* at `rc = 0.0000` and able to swap in at no cost — the dispatch
 table under trap 2. The count there is `basic 1, rows 1`, and the flag says
 `unique`, correctly: it is a statement about the *price*, and the price was
 never in doubt. Units sitting at a bound with a zero reduced cost are a
@@ -973,14 +973,14 @@ offers and ratings, and banked in
 ```
     three units at $25, AD rated 400 MW, DE rated 240, hours 20 and 21
 
-    alta       interior   offer $25   rc 0.0000
-    brighton   interior   offer $25   rc 0.0000
+    A1   interior   offer $25   rc 0.0000
+    E1   interior   offer $25   rc 0.0000
 
     basic 2, rows 1        one uncongested row, two variables free
 ```
 
-A MW moves between alta and brighton at no cost, so the dispatch is one of
-many and the price is still the one number.
+A MW moves between A1 and E1 at no cost, so the dispatch is one of many and
+the price is still the one number.
 
 The flag inherits the flicker rather than curing it. It reads `|mu| > 1e-9`
 and the 1e-6 MW status tolerance in `generator_status`, so within a pixel of
@@ -1257,10 +1257,10 @@ later.
    offer set to $25 and both limits removed:
 
    ```
-   slack   alta  park_city  solitude  sundance  brighton
-   ───────────────────────────────────────────────────────
-     A       0        0        520       200      280
-     C      40      170          0       200      590
+   slack     A1    A2    C1    D1    E1
+   ───────────────────────────────────
+     A        0     0   520   200   280
+     C       40   170     0   200   590
    ```
 
    Same LP, same feasible set, different answer. LMPs held at $25 there only

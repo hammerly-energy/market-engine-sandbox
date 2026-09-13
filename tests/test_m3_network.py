@@ -345,13 +345,13 @@ class TestCase5Network:
             P = ptdf(buses, branches, slack)
             assert np.allclose(P - P[:, [0]], base)
 
-    def test_brighton_pushes_power_down_the_de_corridor(self):
+    def test_e1_pushes_power_down_the_de_corridor(self):
         """The line the whole case turns on.
 
-        Brighton at E is the cheapest unit and the furthest from load. 1 MW
+        E1 at E is the cheapest unit and the furthest from load. 1 MW
         injected there sends 0.48 MW down DE toward D -- negative against the
         declared D -> E direction -- and DE is rated 240 MW. That is what
-        stops Brighton from displacing the fleet.
+        stops E1 from displacing the fleet.
         """
         buses, branches, slack = _case5()
         P = ptdf(buses, branches, slack)
@@ -516,24 +516,24 @@ class TestCase5Uncongested:
     def test_merit_order_stack(self):
         """1000 MW served cheapest-first, ignoring the network entirely.
 
-        Brighton 600 at $10, Park City 170 at $15, Alta 40 at $14 -- both of
-        the A units are cheaper than Solitude, so they fill before it -- and
-        Solitude picks up the remaining 190 of its 520. Sundance at $40 never
+        E1 600 at $10, A2 170 at $15, A1 40 at $14 -- both of
+        the A units are cheaper than C1, so they fill before it -- and
+        C1 picks up the remaining 190 of its 520. D1 at $40 never
         starts.
         """
         s = _clear("none")
         t = s["hour"]
         p = {g: mw for (g, h), mw in s["res"]["p"].items() if h == t}
         assert p == pytest.approx({
-            "brighton": 600.0,
-            "park_city": 170.0,
-            "alta": 40.0,
-            "solitude": 190.0,
-            "sundance": 0.0,
+            "E1": 600.0,
+            "A2": 170.0,
+            "A1": 40.0,
+            "C1": 190.0,
+            "D1": 0.0,
         })
 
     def test_one_price_everywhere(self):
-        """Solitude is marginal, so lambda is its offer -- at every bus."""
+        """C1 is marginal, so lambda is its offer -- at every bus."""
         s = _clear("none")
         t = s["hour"]
         lmp = lmps(s["res"], s["buses"], s["lines"], s["PTDF"], s["island_of"])
@@ -550,11 +550,11 @@ class TestCase5Congested:
     """
 
     def test_dispatch_matches_matpower_opf(self):
-        """Brighton backed down to 466.51, Solitude up to 323.49.
+        """E1 backed down to 466.51, C1 up to 323.49.
 
         Read out of the .m file rather than typed here, so the fixture stays
         the single source of truth. Those are the only two units that move:
-        Alta and Park City are already at their caps and Sundance is still
+        A1 and A2 are already at their caps and D1 is still
         too expensive to start.
         """
         s = _clear("config")
@@ -563,8 +563,8 @@ class TestCase5Congested:
 
         # mpc.gen columns: bus, Pg, ... -- the dispatch MATPOWER's OPF found.
         pg = [row[1] for row in _matpower_rows("gen")]
-        expected = dict(zip(["alta", "park_city", "solitude", "sundance",
-                             "brighton"], pg))
+        expected = dict(zip(["A1", "A2", "C1", "D1",
+                             "E1"], pg))
         assert p == pytest.approx(expected, abs=0.01)
 
     def test_de_is_the_only_binding_line(self):
@@ -591,9 +591,9 @@ class TestCase5Congested:
 
             LMP[i] = lambda + PTDF[DE, i] * mu[DE]
 
-        E prices at Brighton's own offer: it is fenced in behind a saturated
+        E prices at E1's own offer: it is fenced in behind a saturated
         line, so an extra MW of load there is served by the cheapest thing
-        trapped on that side. D prices at 39.94, nearly Sundance's $40,
+        trapped on that side. D prices at 39.94, nearly D1's $40,
         because relief has to come from the expensive side instead.
         """
         s = _clear("config")

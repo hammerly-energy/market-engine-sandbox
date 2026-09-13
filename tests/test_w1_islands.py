@@ -184,11 +184,11 @@ class TestTwoMarkets:
         """{A, E} holds 810 MW of capacity and is not allowed to sell it.
 
         This is the assertion the whole re-indexing exists for. With ONE
-        balance row, Brighton at E would have served load at bus B through a
+        balance row, E1 at E would have served load at bus B through a
         line that is not there, and nothing in the flow limits would have
         objected.
         """
-        for gen in ("alta", "park_city", "brighton"):
+        for gen in ("A1", "A2", "E1"):
             assert split["dispatch"][gen, PEAK_HOUR] == pytest.approx(0.0, abs=1e-6)
 
     def test_the_settlement_identity_holds_per_island_per_hour(self, split):

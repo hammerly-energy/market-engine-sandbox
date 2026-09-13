@@ -191,9 +191,9 @@ class TestWireFidelity:
         a frontend is the thing being debugged.
         """
         t = over_http["hours"].index(PEAK_HOUR)
-        assert over_http["gen_cost"]["brighton"] == pytest.approx(10.0)
-        assert over_http["gen_pmax"]["solitude"] == pytest.approx(520.0)
-        assert over_http["gen_bus"]["brighton"] == "E"
+        assert over_http["gen_cost"]["E1"] == pytest.approx(10.0)
+        assert over_http["gen_pmax"]["C1"] == pytest.approx(520.0)
+        assert over_http["gen_bus"]["E1"] == "E"
         # lmp = lambda + congestion, at every bus. Asserted so the frontend
         # never has to check it -- and never has to compute it.
         for b in over_http["buses"]:
@@ -204,14 +204,14 @@ class TestWireFidelity:
         assert over_http["congestion"][over_http["slack"]][t] == pytest.approx(0.0)
         # TWO units are interior at the peak hour, which is why status is
         # reported per generator rather than as one "marginal unit". DE binds,
-        # so E is a separate pricing region: Brighton is interior at 466.5 of
-        # 600 MW and sets LMP[E] = 10.00, its own offer, while Solitude is
+        # so E is a separate pricing region: E1 is interior at 466.5 of
+        # 600 MW and sets LMP[E] = 10.00, its own offer, while C1 is
         # interior at 323.5 of 520 MW and sets LMP[C] = 30.00.
-        assert over_http["gen_status"]["brighton"][t] == "interior"
-        assert over_http["gen_status"]["solitude"][t] == "interior"
-        assert over_http["gen_status"]["park_city"][t] == "at_max"
-        assert over_http["gen_status"]["sundance"][t] == "off"
-        assert over_http["headroom"]["park_city"][t] == pytest.approx(0.0, abs=1e-6)
+        assert over_http["gen_status"]["E1"][t] == "interior"
+        assert over_http["gen_status"]["C1"][t] == "interior"
+        assert over_http["gen_status"]["A2"][t] == "at_max"
+        assert over_http["gen_status"]["D1"][t] == "off"
+        assert over_http["headroom"]["A2"][t] == pytest.approx(0.0, abs=1e-6)
 
     def test_ptdf_is_shaped_lines_by_buses(self, over_http, in_process):
         P = over_http["PTDF"]

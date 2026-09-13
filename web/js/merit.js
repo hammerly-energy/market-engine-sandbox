@@ -34,7 +34,7 @@
  * CLAUDE.md reserves for this view. It is fleet order and NOT merit position:
  * marginal cost is a lever, so the stack reorders under the reader's hand,
  * and a hue that belonged to the position rather than the unit would have
- * brighton change colour while the reader dragged its cost. src/viz/
+ * E1 change colour while the reader dragged its cost. src/viz/
  * merit_order.py does colour by position, and can: it is an M0 figure of
  * three units that nobody is dragging.
  *
@@ -81,7 +81,7 @@ function tip(el, text) {
  *
  * A halo is enough for a block's name, which sits on empty ground or on a
  * pale fill. It is not enough for λ, which lands wherever the price lands --
- * on the first render "λ = $30.00" sat inside solitude's solid fill, where
+ * on the first render "λ = $30.00" sat inside C1's solid fill, where
  * --ink-wire is unreadable and the halo only fringed it. CLAUDE.md's answer
  * is a bbox at 0.75 on the surface colour, and this is that.
  *
@@ -239,7 +239,7 @@ function renderOne(cleared, hour, gens, bids, lam, verdict, label) {
   /* The names are painted after the demand curve and the λ rule, not with
      their own blocks. Their halo only wins against what is already on the
      canvas, and the demand curve's vertical drop went straight through
-     park_city on the first render. */
+     A2 on the first render. */
   const names = node("g", { class: "merit-names" });
   for (const b of supply) {
     const ink = hue(cleared, b.name);
@@ -403,7 +403,7 @@ function renderOne(cleared, hour, gens, bids, lam, verdict, label) {
   );
   /* Below the rule, except where below is off the bottom. Above puts the
      label in the same corner as the dearest block's name -- λ = $39.94 sat
-     on top of `sundance` on the first render -- and below it is the interior
+     on top of `D1` on the first render -- and below it is the interior
      of that block, which is empty by construction: nothing is drawn above a
      block's own tread. A λ of zero is the exception, and it happens: an
      island with generation and no load prices at zero, and the label there

@@ -30,11 +30,11 @@ network:
     DE: {from: D, to: E, reactance_pu: 0.0297, limit_mw: 240.0}
 
 fleet:
-  alta:      {bus: A, cost_usd_per_mwh: 14.0, pmax_mw:  40.0}
-  park_city: {bus: A, cost_usd_per_mwh: 15.0, pmax_mw: 170.0}
-  solitude:  {bus: C, cost_usd_per_mwh: 30.0, pmax_mw: 520.0}
-  sundance:  {bus: D, cost_usd_per_mwh: 40.0, pmax_mw: 200.0}
-  brighton:  {bus: E, cost_usd_per_mwh: 10.0, pmax_mw: 600.0}
+  A1: {bus: A, cost_usd_per_mwh: 14.0, pmax_mw:  40.0}
+  A2: {bus: A, cost_usd_per_mwh: 15.0, pmax_mw: 170.0}
+  C1: {bus: C, cost_usd_per_mwh: 30.0, pmax_mw: 520.0}
+  D1: {bus: D, cost_usd_per_mwh: 40.0, pmax_mw: 200.0}
+  E1: {bus: E, cost_usd_per_mwh: 10.0, pmax_mw: 600.0}
 
 # ----------------------------------------------------------------------- load
 # A bid is (name, bus, price, quantity), which is a generator's offer with the

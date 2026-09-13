@@ -79,27 +79,27 @@
       }
     },
     "fleet": {
-      "alta": {
+      "A1": {
         "bus": "A",
         "cost_usd_per_mwh": 14.0,
         "pmax_mw": 40.0
       },
-      "park_city": {
+      "A2": {
         "bus": "A",
         "cost_usd_per_mwh": 15.0,
         "pmax_mw": 170.0
       },
-      "solitude": {
+      "C1": {
         "bus": "C",
         "cost_usd_per_mwh": 30.0,
         "pmax_mw": 520.0
       },
-      "sundance": {
+      "D1": {
         "bus": "D",
         "cost_usd_per_mwh": 40.0,
         "pmax_mw": 200.0
       },
-      "brighton": {
+      "E1": {
         "bus": "E",
         "cost_usd_per_mwh": 10.0,
         "pmax_mw": 600.0

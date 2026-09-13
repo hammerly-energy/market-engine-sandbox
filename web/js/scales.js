@@ -114,7 +114,7 @@ export function rampCss(steps = 9) {
  * second copy would be a second palette, and it would drift.
  *
  * Fleet order is a position, so removing a unit recolours the units after
- * it. Measured: delete park_city, solitude and sundance and brighton goes
+ * it. Measured: delete A2, C1 and D1 and E1 goes
  * from --hue-4 to --hue-1. The alternatives are worse. Merit position moves
  * under the cost slider, which is a far more frequent act than deleting a
  * unit, and a hash of the name onto five hues collides -- two units the same

@@ -631,7 +631,7 @@ button.undo {
 /* W3.2 took the bus's identity hue off the square, because buses stopped
    having one. W3.4 gives it the UNIT's hue, which is a different claim: it
    is the colour of that generator's block in the merit-order stack, and it
-   is what lets a reader carry `brighton` from the named block to the
+   is what lets a reader carry `E1` from the named block to the
    unlabelled square. render.js fills each square with that hue, as an inline
    style -- a presentation attribute would lose to the declarations below.
    The hue is the fill and not the outline, which is a contrast measurement

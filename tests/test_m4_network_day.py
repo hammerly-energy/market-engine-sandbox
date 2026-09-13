@@ -214,8 +214,8 @@ class TestM3RegressionAtPeak:
 
     def test_peak_hour_reproduces_m3_dispatch(self, day):
         """MATPOWER's own OPF answer for case5, via the m3 notes."""
-        assert day["dispatch"]["brighton", PEAK_HOUR] == pytest.approx(466.51, abs=1e-2)
-        assert day["dispatch"]["solitude", PEAK_HOUR] == pytest.approx(323.49, abs=1e-2)
+        assert day["dispatch"]["E1", PEAK_HOUR] == pytest.approx(466.51, abs=1e-2)
+        assert day["dispatch"]["C1", PEAK_HOUR] == pytest.approx(323.49, abs=1e-2)
 
     def test_peak_hour_matches_a_direct_m3_solve(self, day):
         """Not just the transcribed numbers -- the same code on the same config.
