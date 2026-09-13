@@ -38,7 +38,8 @@
         <p class="caption" id="network-caption">
           A disc is a bus and its ring is the LMP; the outer ring is the slack. A
           square is a generator — details on hover. A wire's width is its flow and
-          its colour the direction.
+          its colour the direction. A dashed ring is a price the ramp cannot
+          carry — none yet, or one the optimum does not pin. Hover says which.
         </p>
       </section>
 
@@ -66,7 +67,9 @@
         <div id="split"></div>
         <p class="caption">
           Congestion is zero at the slack, so its price is λ. Move the slack: the
-          bars change, the prices do not.
+          bars change, the prices do not. A hollow end cap and “one of several”
+          mean the optimum pins no single price, so the number is one end of an
+          interval.
         </p>
       </section>
 
@@ -127,7 +130,8 @@
         <p class="caption">
           One λ and one settlement identity per island, per hour. The residual
           is rent from the money minus rent from the duals — shown, not
-          hidden.
+          hidden. The last column says whether the optimum pins one price and
+          one dispatch; an island with nothing in it pins neither.
         </p>
       </section>
 

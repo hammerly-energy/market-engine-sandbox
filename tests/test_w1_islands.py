@@ -323,6 +323,63 @@ class TestDeletedSlack:
             assert a["lmp"][bus, PEAK_HOUR] == pytest.approx(b["lmp"][bus, PEAK_HOUR])
 
 
+class TestAnIslandWithNothingInIt:
+    """*Add bus* and nothing else: an island with no generator, no load, no line.
+
+    The one-move version of the case W1 named under "an island with generation
+    and no load is degenerate". This one has nothing on either side, so the
+    balance row is 0 == 0 -- resolved in _balance as Constraint.Feasible -- and
+    lambda sits anywhere at all. The solver hands back -0.0.
+
+    What matters is not the number but that the flag says so, because the
+    views read the flag and print the number. Before W3.9 the LMP panel, the
+    settlement ledger and the network map all printed a bare $0.00 and the
+    map's ramp inked it the cheapest bus on the page. The frontend asserts its
+    own half in web/check-views.html; this is the field it reads.
+
+    Every hour, not some hour. The domain the map's ramp is drawn over is
+    taken across the whole day, so scales.js drops a bus only when no hour of
+    it carries a readable price -- and that rule is only sound because a bus
+    with no market is an interval in all 24, while an ordinary degenerate
+    breakpoint is a few hours of the twenty-four.
+    """
+
+    @pytest.fixture(scope="class")
+    def cleared(self):
+        config = load_config(W1_CONFIG)
+        config["network"]["buses"].append("Z")
+        return clear(scenario_from_config(config), slack="D")
+
+    def test_the_empty_bus_is_its_own_island(self, cleared):
+        assert cleared["islands"]["Z"] == ["Z"]
+        assert cleared["island_of"]["Z"] == "Z"
+
+    def test_it_prices_at_nothing_in_particular(self, cleared):
+        assert cleared["lmbda"]["Z", PEAK_HOUR] == pytest.approx(0.0, abs=1e-9)
+        assert cleared["lmp"]["Z", PEAK_HOUR] == pytest.approx(0.0, abs=1e-9)
+
+    def test_and_says_so_in_every_hour(self, cleared):
+        verdicts = {cleared["uniqueness"]["Z", t]["verdict"] for t in range(24)}
+        assert verdicts == {"price_is_an_interval"}
+
+    def test_the_real_island_is_unaffected(self, cleared):
+        """The empty bus is a separate market and moves no price in the other.
+
+        Which is what makes dropping it from the map's colour domain a
+        correction rather than a second answer: the prices it was distorting
+        are the same prices they were before it existed.
+        """
+        base = clear(scenario_from_config(load_config(W1_CONFIG)), slack="D")
+        for bus in base["buses"]:
+            assert cleared["lmp"][bus, PEAK_HOUR] == pytest.approx(
+                base["lmp"][bus, PEAK_HOUR]
+            )
+        for t in range(24):
+            assert cleared["uniqueness"]["D", t]["verdict"] == (
+                base["uniqueness"]["D", t]["verdict"]
+            )
+
+
 # ------------------------------------------------------------- the wire
 
 

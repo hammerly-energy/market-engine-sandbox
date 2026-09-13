@@ -607,6 +607,56 @@ was struck through the moment it was painted `#104281` at its rating.
 Invisible while every wire was pale grey. The label now sits on an opaque
 surface plate, which is CLAUDE.md's own bbox rule applied to the map.
 
+#### What W3.9 landed
+
+**The three remaining views that print a price now read the uniqueness
+flag.** W3.1 put it on the wire and only the merit stack read it, so the LMP
+panel, the settlement ledger and the network map each printed a number the
+engine had already said was one of several.
+
+The one-move case is *Add bus* and nothing else. Measured on `configs/w1.yaml`
+with one extra bus `Z` carrying no generator, no load and no branch:
+
+```
+    island Z    lambda = -0.00, basic 0 < rows 1, all 24 hours
+    LMP[Z]      0.00
+    domain      with Z   $0.00 to $39.94
+                without  $10.00 to $39.94
+```
+
+So `Z` was not only inking itself the cheapest ring on the map, it was pulling
+A through E a quarter of the way up the ramp. **A bus whose price is an
+interval in every hour of the day is off the colour domain**, and the test is
+over the whole day rather than this hour, which is what keeps it out of trap
+3: an ordinary breakpoint is a few hours of the twenty-four — rate DE at the
+282.84033120469894 MW it carries unrated and hours 8 and 18 go interval while
+the other twenty-two stay unique — so a bus at a breakpoint keeps its place
+and the scale does not jump as a slider walks through one.
+
+**The flag qualifies a number; it never replaces one.** λ and the LMP are
+still printed, because the engine returned them and suppressing them would be
+the page deciding an answer was too ambiguous to show. The wording is
+`verdictNote()` and `verdictLabel()` in `web/js/render.js`, one definition
+each, because four views say it now.
+
+**The map draws the unpriced ring and the interval ring identically, and that
+is a correction made by rendering the picture and looking at it.** They were
+drawn differently first, on the reasoning that an interval ring at its own
+ink and weight reads as "about here". It does not: an interval-priced bus is
+off the domain, so its price clamps to an end of the ramp, and `Z` came out
+pale and thin — which is exactly the unpriced ring, under a caption claiming
+the two were told apart by weight and ink. One mark for one meaning instead,
+*do not read this ring off the ramp*, and which of the two it is lives in the
+tooltip, the LMP panel and the ledger, where there is room for words.
+
+The LMP panel's end cap goes hollow at the same ink and the same position,
+for the same reason: a solid cap says the price is at this point of the
+domain, and one end of an interval is not a point.
+
+`tests/test_w1_islands.py:TestAnIslandWithNothingInIt` holds the engine half
+and `web/check-views.html` holds the frontend's, the same split and the same
+reason as `check-emit.html`.
+
 ### What the engine already refuses
 
 Measured against the M3 case5 scenario, not assumed. This table exists so W1
@@ -622,6 +672,7 @@ be checked against a list of what was already true.
 | Drags a line rating to 0 | `ValueError: limit override for DE: limit_mw must be > 0` at `clearing.py` | Fixed at W3.8. The override skips `Branch`, so it restates `Branch`'s rule. At 0 it used to solve: μ[DE] = $13,527.99 with `loading` printing 0.0, because a zero rating divides into the flow |
 | Duplicates a bus or branch name | `ValueError` at `Scenario.__post_init__` | Clean |
 | Adds a bus with no generator and no load | Prices correctly. The bus gets a real LMP | **Not a bug.** Do not "fix" |
+| Adds a bus and connects nothing to it | Its own island, `λ = -0.0`, `LMP = 0.0`, flagged `price_is_an_interval` in all 24 hours | Degenerate, not broken. Trap 3. The views printed it bare until W3.9 |
 | Adds a second line between two buses | Solves correctly | **Not a bug.** Parallel lines are physical |
 | Sets capacity below load, demand priced | Sheds the least valuable MW, λ rises to the highest bid | Fixed at W1 — a scarcity price, not an error |
 | Sets capacity below load, demand inelastic | `RuntimeError: solve not optimal: infeasible` | The last refusal standing. Unreachable from the editor, which emits only `blocks` |

@@ -1,0 +1,160 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>views check</title>
+<style>
+ body{font:13px ui-monospace,Menlo,monospace;margin:12px;background:#fcfcfb}
+ li{margin:2px 0}
+ .ok{color:#0a7a3f} .bad{color:#a8380f}
+ pre{background:#f3f2ee;padding:8px;overflow:auto;max-height:240px}
+</style>
+<!-- W3.9's half of the uniqueness flag, and the only kind this repo can run:
+     the views are JavaScript and there is no JavaScript runtime in this
+     environment, so the modules are imported into a real browser instead.
+     Same pattern and same reason as check-emit.html.
+
+     The claim, in two halves that meet at the flag clear() returns:
+
+       an island with nothing in it is price_is_an_interval in all 24 hours
+                                     asserted in tests/test_w1_islands.py,
+                                     TestAnIslandWithNothingInIt
+       a bus with no readable price is off the map's colour domain, and the
+       three views that print a price say which ones are not pinned
+                                     asserted here
+
+     Before this landed, only the merit stack read the flag. The LMP panel,
+     the settlement ledger and the network map printed a bare $0.00 for a bus
+     with no market, and the map's ramp inked it the cheapest bus on the page
+     and pulled every real price a quarter of the way up the scale with it.
+
+     Run it: serve the app and open /check-views.html. Or headless:
+
+       .venv/bin/uvicorn src.api.app:app --port 8000
+       chrome --headless=new --screenshot=out.png --window-size=1000,800 \
+              --virtual-time-budget=20000 http://127.0.0.1:8000/check-views.html
+
+     A development page, not linked from the app. Drop it from the W4 deploy. -->
+<ul id="out"></ul>
+<pre id="diff"></pre>
+<script type="module">
+import { fetchSeed, stateFromSeed } from "./js/state.js";
+import { postClear } from "./js/api.js";
+import { verdictNote, verdictLabel, verdictFor } from "./js/render.js";
+import { priceDomain } from "./js/scales.js";
+
+const out = document.querySelector("#out");
+const results = [];
+function check(name, cond, extra = "") {
+  results.push(cond);
+  const li = document.createElement("li");
+  li.className = cond ? "ok" : "bad";
+  li.textContent = `${cond ? "PASS" : "FAIL"}  ${name}${extra ? " — " + extra : ""}`;
+  out.append(li);
+}
+const near = (a, b) => Math.abs(a - b) < 1e-6;
+
+/* ------------------------------------------------ the wording, three views
+
+   One sentence per verdict in one place, because merit.js, the LMP panel,
+   the ledger and the map all print a price and all four have to qualify it
+   the same way. */
+
+check("unique is not narrated", verdictNote("unique") === null);
+check("an interval price is 'one of several'",
+      verdictNote("price_is_an_interval") === "one of several");
+check("a free dispatch says so",
+      verdictNote("dispatch_is_not_unique") === "on one of several dispatches");
+
+/* The cell form names its subject, which the appended clause inherits from
+   the lambda it follows. */
+check("the ledger cell names the price",
+      verdictLabel("price_is_an_interval") === "the price is one of several");
+check("the ledger cell names the dispatch",
+      verdictLabel("dispatch_is_not_unique") === "the dispatch is one of several");
+check("and says unique out loud, because a column cell cannot be blank",
+      verdictLabel("unique") === "unique");
+
+/* ------------------------------------------------------- the colour domain
+
+   A stub rather than a solve, so the rule is asserted on its own: three
+   buses, one of them an interval in every hour, one at a breakpoint in one
+   hour of three, one clean. */
+const stub = {
+  buses: ["A", "B", "Z"],
+  lmp: { A: [10, 20, 30], B: [15, 25, 35], Z: [0, 0, 0] },
+  island_of: { A: "A", B: "A", Z: "Z" },
+  uniqueness: {
+    A: { verdict: ["unique", "price_is_an_interval", "unique"] },
+    Z: { verdict: ["price_is_an_interval", "price_is_an_interval",
+                   "price_is_an_interval"] },
+  },
+};
+const d = priceDomain(stub);
+check("a bus with no readable price is off the domain",
+      near(d.lo, 10) && near(d.hi, 35), `got $${d.lo} to $${d.hi}`);
+
+/* The rule is over the whole day, which is what keeps it out of trap 3: a
+   bus at an ordinary breakpoint keeps its place, so the scale does not jump
+   as a slider walks through one. */
+check("a bus at a breakpoint keeps its place", near(d.lo, 10));
+
+/* If nothing has a readable price the domain is taken over every bus rather
+   than going null, so a network of empty buses still draws its rings and its
+   axis. Every ring there is dashed, which is the statement that matters. */
+const allEmpty = {
+  buses: ["Y", "Z"],
+  lmp: { Y: [0, 0], Z: [0, 0] },
+  island_of: { Y: "Y", Z: "Z" },
+  uniqueness: {
+    Y: { verdict: ["price_is_an_interval", "price_is_an_interval"] },
+    Z: { verdict: ["price_is_an_interval", "price_is_an_interval"] },
+  },
+};
+check("and it falls back rather than going null",
+      priceDomain(allEmpty) !== null);
+
+/* -------------------------------------------------------- against a solve
+
+   The same claim end to end: *Add bus* and nothing else, posted to the real
+   engine, and the figures the comments in scales.js quote. */
+try {
+  const seed = await fetchSeed();
+  const state = stateFromSeed(seed);
+
+  const clean = await postClear(state);
+  const before = priceDomain(clean);
+  check("w1 prices $10.00 to $39.94",
+        near(before.lo, 10) && near(before.hi, 39.942736322790935),
+        `got $${before.lo.toFixed(4)} to $${before.hi.toFixed(4)}`);
+
+  state.buses.push({ name: "Z", x: 40, y: 40 });
+  const withZ = await postClear(state);
+
+  check("the empty bus is its own island", withZ.island_of.Z === "Z");
+  check("and the engine flags it in every hour",
+        withZ.uniqueness.Z.verdict.every((v) => v === "price_is_an_interval"));
+  check("verdictFor finds it through the bus",
+        verdictFor(withZ, "Z", 18) === "price_is_an_interval");
+  check("and finds the real island unflagged",
+        verdictFor(withZ, "D", 18) === "unique");
+
+  const after = priceDomain(withZ);
+  check("adding it does not move the domain",
+        near(after.lo, before.lo) && near(after.hi, before.hi),
+        `got $${after.lo.toFixed(4)} to $${after.hi.toFixed(4)}`);
+  check("though its own price is on the wire, unhidden",
+        near(withZ.lmp.Z[18], 0));
+
+  document.querySelector("#diff").textContent =
+    `domain without Z   $${before.lo.toFixed(4)} to $${before.hi.toFixed(4)}\n` +
+    `domain with Z      $${after.lo.toFixed(4)} to $${after.hi.toFixed(4)}\n` +
+    `LMP[Z, 18]         $${withZ.lmp.Z[18].toFixed(4)}\n` +
+    `lambda[Z, 18]      $${withZ.lmbda.Z[18].toFixed(4)}\n` +
+    `verdict[Z]         ${withZ.uniqueness.Z.verdict[18]}\n` +
+    `verdict[D]         ${withZ.uniqueness.D.verdict[18]}`;
+} catch (err) {
+  check("the round trip ran", false, String(err?.message ?? err));
+}
+
+const bad = results.filter((r) => !r).length;
+document.title = bad ? `views check — ${bad} FAILED` : "views check — all pass";
+</script>

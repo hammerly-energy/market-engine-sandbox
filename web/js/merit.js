@@ -44,7 +44,7 @@
  * percentages in splitRow -- and it never adds a price to a price.
  */
 
-import { usd } from "./render.js";
+import { usd, verdictNote } from "./render.js";
 import { genInk } from "./scales.js";
 
 const NS = "http://www.w3.org/2000/svg";
@@ -414,9 +414,11 @@ function renderOne(cleared, hour, gens, bids, lam, verdict, label) {
   /* The flag W3.1 put on the wire, said where the number it qualifies is.
      An island with generation and no load prices anywhere between zero and
      the cheapest offer, and printing $0.00 bare would claim the market said
-     something it did not (CLAUDE.md, W1 islands; trap 3). */
-  if (verdict === "price_is_an_interval") lamText += ", one of several";
-  else if (verdict === "dispatch_is_not_unique") lamText += ", on one of several dispatches";
+     something it did not (CLAUDE.md, W1 islands; trap 3). The wording is
+     verdictNote's, shared with the LMP panel, the ledger and the map, which
+     read the flag from W3.9 and printed bare numbers before that. */
+  const note = verdictNote(verdict);
+  if (note) lamText += `, ${note}`;
 
   svg.append(
     annotation(lamText, W - PAD.r, y(lam) + (lamLow ? -6 : ANNOT + 2), "end"),

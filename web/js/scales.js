@@ -67,15 +67,56 @@ function greyFromL(L) {
  * so a domain that moved is visible as a domain that moved.
  */
 export function priceDomain(cleared) {
+  const readable = cleared.buses.filter((bus) => hasAPrice(cleared, bus));
+  const over = readable.length ? readable : cleared.buses;
   let lo = Infinity;
   let hi = -Infinity;
-  for (const bus of cleared.buses) {
+  for (const bus of over) {
     for (const v of cleared.lmp[bus]) {
       if (v < lo) lo = v;
       if (v > hi) hi = v;
     }
   }
   return Number.isFinite(lo) ? { lo, hi } : null;
+}
+
+/* Does this bus have a price the ramp can carry, in any hour of the day?
+ *
+ * W3.9. A bus in an island the flag calls `price_is_an_interval` all day has
+ * none. The number the engine returns there is one end of an interval, and
+ * putting it on the domain moves every other bus's ink. Measured on
+ * configs/w1.yaml with one extra bus Z -- no generator, no load, no branch,
+ * which is the editor's *Add bus* and nothing else:
+ *
+ *     island Z   lambda = -0.00, basic 0 < rows 1, every hour
+ *     LMP[Z]     0.00
+ *     domain     with Z   $0.00 to $39.94
+ *                without  $10.00 to $39.94
+ *
+ * So Z was not only inking itself the cheapest ring on the map, it was
+ * pulling A through E a quarter of the way up the ramp.
+ *
+ * The test is over the WHOLE DAY and not this hour, which is what keeps it
+ * out of trap 3. An ordinary degenerate breakpoint is a few hours of the
+ * twenty-four -- rate DE at the 282.84033120469894 MW it carries unrated and
+ * hours 8 and 18 go interval while the other twenty-two stay unique -- so a
+ * bus at a breakpoint keeps its place on the domain and the scale does not
+ * jump as the slider moves. A bus with no market at
+ * all is an interval in every hour, and it is that permanence, not the
+ * degeneracy, that says it has no price to plot.
+ *
+ * The fallback is the last line of priceDomain: if no bus has a readable
+ * price, the domain is taken over all of them rather than going null, so a
+ * network of nothing but empty buses still draws its rings and its axis
+ * instead of blanking the panel. Every ring there is dashed, which is the
+ * statement that matters.
+ */
+function hasAPrice(cleared, bus) {
+  const home = cleared.island_of && cleared.island_of[bus];
+  if (!home) return true;
+  const verdict = cleared.uniqueness && cleared.uniqueness[home];
+  if (!verdict) return true;
+  return verdict.verdict.some((v) => v !== "price_is_an_interval");
 }
 
 /* Where a price sits on its domain, 0 at the cheap end and 1 at the dear.

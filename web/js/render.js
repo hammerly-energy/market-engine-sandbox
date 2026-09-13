@@ -227,6 +227,10 @@ export function renderNetwork(svg, state, cleared = null, hour = 0) {
   const domain = cleared ? priceDomain(cleared) : null;
   const lmpAt = (bus) =>
     cleared && cleared.lmp[bus] ? cleared.lmp[bus][hour] : null;
+  /* W3.9. Whether the price this ring draws is the price or one end of an
+     interval. Per island and per hour, which is how the engine flags it. */
+  const intervalAt = (bus) =>
+    verdictFor(cleared, bus, hour) === "price_is_an_interval";
   /* W3.6. The flow in MW. Null for a line the last answer does not carry,
      which is a branch the editor has just connected: drawn immediately,
      flowing a round trip later. */
@@ -419,15 +423,26 @@ export function renderNetwork(svg, state, cleared = null, hour = 0) {
     const gens = generatorsAt(state.fleet, bus.name);
     const dir = labelDirection(bus, state.branches, at);
     const lmp = lmpAt(bus.name);
-    const ink = lmp === null ? NO_PRICE : priceInk(lmp, domain);
-    const weight =
-      lmp === null
-        ? size.priceRingNone
-        : size.priceRingMin + size.priceRingSpan * priceAt(lmp, domain);
+    const interval = lmp !== null && intervalAt(bus.name);
+    /* Both states draw the same ring, and that was a correction: they were
+       drawn differently until the picture was rendered and looked at. An
+       interval-priced bus is off the colour domain (scales.js), so its price
+       clamps to an end of the ramp and the ink and weight it would take from
+       there are arbitrary -- Z came out pale and thin, which is exactly the
+       unpriced ring, while the caption claimed the two were told apart by
+       weight and ink. One mark for one meaning instead: do not read this ring
+       off the ramp. Which of the two it is, is words, and the tooltip, the
+       LMP panel and the ledger all have room for them. */
+    const unread = lmp === null || interval;
+    const ink = unread ? NO_PRICE : priceInk(lmp, domain);
+    const weight = unread
+      ? size.priceRingNone
+      : size.priceRingMin + size.priceRingSpan * priceAt(lmp, domain);
 
     const about =
       `Bus ${bus.name}` +
       (lmp === null ? ", not priced yet" : `, LMP $${lmp.toFixed(4)}/MWh`) +
+      (interval ? ", one of several" : "") +
       (bus.name === state.slack ? ", the slack" : "") +
       (gens.length ? `, ${gens.length} generator(s)` : ", no generator");
 
@@ -459,7 +474,14 @@ export function renderNetwork(svg, state, cleared = null, hour = 0) {
     /* The ring is the price and the fill is the surface, so the name inside
        reads against paper rather than against a shade that moves. A price
        with no answer yet is dashed: a pale ring is the cheap end of the ramp
-       and would assert a price of zero. */
+       and would assert a price of zero.
+
+       W3.9 sends a second state down the same path. A ring is a position on
+       the ramp, and a price the engine flags as an interval has no position
+       -- the number is one end of one. Reachable in one editor move: *Add
+       bus* and nothing else gives a bus with no generator, no load and no
+       branch, whose island prices at -0.00 in all 24 hours and inked the
+       cheapest ring on the map until this landed. */
     g.append(
       node("circle", {
         cx: bus.x,
@@ -467,8 +489,8 @@ export function renderNetwork(svg, state, cleared = null, hour = 0) {
         r: size.disc,
         stroke: ink,
         "stroke-width": weight,
-        class: lmp === null ? "disc disc-unpriced" : "disc",
-        "stroke-dasharray": lmp === null ? size.priceRingNone * 2 : "none",
+        class: unread ? "disc disc-unpriced" : "disc",
+        "stroke-dasharray": unread ? size.priceRingNone * 2 : "none",
       }),
     );
     g.append(
@@ -569,14 +591,18 @@ export function renderNetwork(svg, state, cleared = null, hour = 0) {
 
 /* ---------------------------------------------------------------- tables */
 
-function table(head, rows) {
+/* Column 0 is a name and the rest are numbers, which is every table on this
+   page except one: `text` names the columns that carry prose instead, so the
+   ledger's verdict column is not right-aligned in the numeric face beside
+   four figures it is not comparable with. */
+function table(head, rows, text = new Set()) {
   const t = document.createElement("table");
   const thead = document.createElement("thead");
   const hr = document.createElement("tr");
   head.forEach((h, i) => {
     const th = document.createElement("th");
     th.textContent = h;
-    if (i > 0) th.className = "num";
+    if (i > 0 && !text.has(i)) th.className = "num";
     hr.append(th);
   });
   thead.append(hr);
@@ -586,13 +612,61 @@ function table(head, rows) {
     row.forEach((cell, i) => {
       const td = document.createElement("td");
       td.textContent = cell;
-      if (i > 0) td.className = "num";
+      if (i > 0 && !text.has(i)) td.className = "num";
       tr.append(td);
     });
     tbody.append(tr);
   }
   t.append(thead, tbody);
   return t;
+}
+
+/* ------------------------------------------- W3.9, saying what the flag says
+ *
+ * One sentence per verdict, defined once, because three views print a price
+ * and all three have to qualify it the same way. merit.js had these two
+ * strings alone from W3.4 and the LMP panel, the ledger and the map printed
+ * their numbers bare.
+ *
+ * It qualifies a number rather than replacing it. The engine returned that
+ * price and the page prints it; the flag is the other thing the engine said,
+ * which is how alone the number is. Suppressing it would be the page
+ * deciding an answer was too ambiguous to show, and the repo's whole position
+ * on degeneracy is the opposite (CLAUDE.md, *Degeneracy under a moving
+ * slider*).
+ *
+ * Null for `unique`, because an unqualified number already reads as the one
+ * answer and "unique" on every row is noise on every row.
+ *
+ * Nothing here smooths the flicker. The flag reads mu against 1e-9 and
+ * dispatch against 1e-6 MW, so within a pixel of a breakpoint the flag itself
+ * moves between answers -- trap 3 one level up, and the rule is unchanged.
+ */
+export function verdictNote(verdict) {
+  if (verdict === "price_is_an_interval") return "one of several";
+  if (verdict === "dispatch_is_not_unique") return "on one of several dispatches";
+  return null;
+}
+
+/* The same three verdicts as a table cell. A clause appended after `λ = $0.00`
+   inherits λ as its subject; a cell in a column has none, and the two
+   verdicts are about two different things -- the price and the dispatch -- so
+   a cell has to name which. Defined here, beside verdictNote, so the two
+   wordings cannot drift into disagreeing about what the flag means. */
+export function verdictLabel(verdict) {
+  if (verdict === "price_is_an_interval") return "the price is one of several";
+  if (verdict === "dispatch_is_not_unique") return "the dispatch is one of several";
+  return "unique";
+}
+
+/* The verdict for the island a bus is in, this hour. Null when the last
+   answer does not carry that bus -- one the editor just added, drawn at once
+   and priced a round trip later. */
+export function verdictFor(cleared, bus, hour) {
+  if (!cleared || !cleared.island_of) return null;
+  const home = cleared.island_of[bus];
+  if (!home || !cleared.uniqueness || !cleared.uniqueness[home]) return null;
+  return cleared.uniqueness[home].verdict[hour];
 }
 
 /* W3.3 folded the LMP table into renderSplit. It was a bus name, a price
@@ -618,9 +692,27 @@ export function renderIslands(el, cleared, hour) {
     usd(cleared.lmbda[home][hour]),
     cleared.islands[home].length,
     residual(cleared.settlement[home].residual[hour]),
+    /* W3.9. The λ column is the one number on this page with no bar, no ring
+       and no bid beside it to read it against, so it is the column most
+       likely to be taken at face value. An island with no generator, no load
+       and no branch prices at -0.00 every hour of the day and the ledger
+       printed that bare. Sentence rather than the raw verdict string:
+       `price_is_an_interval` is an identifier from pricing.py and this is a
+       column a visitor reads. */
+    verdictLabel(cleared.uniqueness[home].verdict[hour]),
   ]);
   el.replaceChildren(
-    table(["Island (named by its slack)", "λ ($/MWh)", "Buses", "Residual ($)"], rows),
+    table(
+      [
+        "Island (named by its slack)",
+        "λ ($/MWh)",
+        "Buses",
+        "Residual ($)",
+        "The optimum",
+      ],
+      rows,
+      new Set([4]),
+    ),
   );
 }
 
@@ -672,8 +764,10 @@ export function renderLegend(el, cleared) {
   const note = document.createElement("p");
   note.className = "ramp-note";
   note.textContent = domain
-    ? "Bus ring: LMP ($/MWh), darker and thicker is dearer. The domain is " +
-      "every bus over the whole day; the hour does not rescale it."
+    ? "Bus ring: LMP ($/MWh), darker and thicker is dearer. Dashed is a " +
+      "price the ramp cannot carry: none yet, or one the optimum does not " +
+      "pin. The domain is every bus with a price over the whole day; the " +
+      "hour does not rescale it."
     : "Bus ring: LMP ($/MWh), darker and thicker is dearer. No solve yet.";
   el.append(note);
 }
@@ -751,6 +845,7 @@ function splitRow(name, cleared, hour, home, domain) {
   }
 
   const lam = cleared.lmbda[home][hour];
+  const note = verdictNote(verdictFor(cleared, name, hour));
   const atLam = priceAt(lam, domain) * 100;
   const atLmp = priceAt(lmp[hour], domain) * 100;
 
@@ -764,11 +859,20 @@ function splitRow(name, cleared, hour, home, domain) {
   bar.style.width = `${Math.abs(atLmp - atLam)}%`;
 
   /* The end cap is inked from the same function as the map's rings, so the
-     bus that is darkest here is the darkest disc there. */
+     bus that is darkest here is the darkest disc there.
+
+     W3.9: hollow when the price is an interval. A solid cap says the price is
+     at this point of the domain, and one end of an interval is not a point.
+     Same ink and same position -- the number beside it is unchanged, because
+     it is what the engine returned -- and it is the same statement the map's
+     ring makes by going dashed. */
+  const interval = verdictFor(cleared, name, hour) === "price_is_an_interval";
+  const ink = priceInk(lmp[hour], domain);
   const cap = document.createElement("div");
   cap.className = "split-cap";
   cap.style.left = `${atLmp}%`;
-  cap.style.background = priceInk(lmp[hour], domain);
+  cap.style.background = interval ? "var(--surface)" : ink;
+  if (interval) cap.style.boxShadow = `0 0 0 2px ${ink}`;
 
   track.append(rule, bar, cap);
 
@@ -777,7 +881,8 @@ function splitRow(name, cleared, hour, home, domain) {
      them (CLAUDE.md, Interactive figure register). */
   row.title =
     `${name}: λ ${lam.toFixed(4)} + congestion ${cong[hour].toFixed(4)}` +
-    ` = LMP ${lmp[hour].toFixed(4)} $/MWh`;
+    ` = LMP ${lmp[hour].toFixed(4)} $/MWh` +
+    (note ? `, ${note}` : "");
 
   value.textContent = usd(lmp[hour]);
   row.append(label, track, value);
@@ -809,7 +914,9 @@ export function renderSplit(el, cleared, hour, order) {
        one has several λ and the reader has to know which is which. */
     const head = document.createElement("p");
     head.className = "split-lambda";
-    const lam = `λ = $${usd(cleared.lmbda[home][hour])}/MWh`;
+    const note = verdictNote(cleared.uniqueness[home].verdict[hour]);
+    const lam =
+      `λ = $${usd(cleared.lmbda[home][hour])}/MWh` + (note ? `, ${note}` : "");
     head.textContent = many ? `${lam} · island ${home}` : lam;
     group.append(head);
 
