@@ -46,6 +46,7 @@ import { renderFlows } from "./flows.js";
 import { mountGrammar } from "./grammar.js";
 import { renderMerit } from "./merit.js";
 import { checkBounds, fetchSeed, stateFromSeed } from "./state.js";
+import { renderUnits } from "./units.js";
 import {
   markStale,
   renderIslands,
@@ -128,6 +129,7 @@ function paint() {
      and which is "to", so the panel can say which way a positive flow goes.
      Every number in the view is the engine's. */
   renderFlows(document.querySelector("#flows"), cleared, hour, editor.branches);
+  renderUnits(document.querySelector("#units"), cleared, hour);
   renderIslands(document.querySelector("#islands"), cleared, hour);
 
   document.querySelector("#hour-note").textContent =

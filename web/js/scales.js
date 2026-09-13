@@ -222,3 +222,26 @@ export function flowDomain(cleared) {
    data -- and 50 MW is fine enough that rounding up never leaves the longest
    bar stranded in the middle of the track. */
 const STEP = 50;
+
+/* ------------------------------------------------- the capacity scale, W3.7
+ *
+ * The MW domain every dispatch bar is drawn on: the largest capacity in the
+ * fleet, and nothing rounded up to it.
+ *
+ * Not rounded, unlike flowDomain, because the two axes end on different kinds
+ * of thing. A flow axis ends on an arbitrary number -- one hour's largest
+ * flow is an accident of the data -- so it is rounded to something a reader
+ * can read a value off. A capacity axis ends on a capacity somebody offered,
+ * which is already a number with a meaning, and rounding 600 up to 650 would
+ * put the axis end three centimetres past the last tick for no gain.
+ *
+ * Fixed across the day without any argument being needed: capacity is not
+ * indexed by hour. It moves when the capacity lever moves, which is a new
+ * solve and a new market, and that is the same rule priceDomain and
+ * flowDomain follow.
+ */
+export function capacityDomain(cleared) {
+  let hi = 0;
+  for (const g of cleared.generators) hi = Math.max(hi, cleared.gen_pmax[g]);
+  return hi > 0 ? hi : 1;
+}

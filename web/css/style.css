@@ -1194,3 +1194,129 @@ button[aria-pressed="true"]:focus-visible {
   stroke-linecap: round;
   pointer-events: none;
 }
+
+/* ------------------------------------------ W3.7, generation by unit
+   Rows, like the flows above and the LMP split above that. The panel spans
+   the frame because the fleet's MW span is fifteen to one — A1 at 40
+   against E1 at 600 — and in a half-width column A1's bar is four
+   pixels, which is a mark a reader cannot tell from zero. */
+
+.unit-group { margin: 0 0 0.4rem; }
+
+.unit-island {
+  margin: 0 0 0.3rem;
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+}
+
+.unit-row {
+  display: grid;
+  /* Measured at the frame's width: the fixed columns and their gaps came to
+     817 px in an 843 px panel, so the last header sat half outside it. The
+     numeric columns are sized to their values and the headers wrap over two
+     lines, which is the register's answer — move text, never shrink it. */
+  grid-template-columns:
+    5.6rem 2.4rem minmax(6rem, 1fr) 4.8rem 5.2rem 5.4rem 5.6rem 4.8rem;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: var(--type-annot);
+}
+
+.unit-head {
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--grid);
+  padding-bottom: 0.2rem;
+  margin-bottom: 0.2rem;
+}
+
+.unit-track-head { text-align: center; }
+
+.unit-name {
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.unit-bus { color: var(--ink-2); }
+
+/* The engine's own three words. --ink-2 rather than --ink: the row's subject
+   is the bar, and the word is a label on it. */
+.unit-status {
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.unit-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.unit-track {
+  position: relative;
+  height: 1.15rem;
+}
+
+/* The origin. An off unit's bar has zero width, so without a mark at zero the
+   row would be an empty strip. */
+.unit-zero {
+  position: absolute;
+  left: 0;
+  top: 0.1rem;
+  bottom: 0.1rem;
+  z-index: 2;
+  border-left: 1px solid var(--ink-muted);
+}
+
+/* Capacity, and darker when the unit is sitting on it. The state is taken
+   from gen_status, so the tick and the bar's length are the same fact from
+   the same field rather than this file comparing two floats. */
+.unit-tick {
+  position: absolute;
+  top: 0.1rem;
+  bottom: 0.1rem;
+  z-index: 1;
+  border-left: 1px solid var(--ink-muted);
+  transition: left 180ms ease;
+}
+
+.unit-tick.full { border-left: 1.5px solid var(--ink); }
+
+.unit-bar {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 0.42rem;
+  transform: translateY(-50%);
+  z-index: 0;
+  /* Continuity: dragging a capacity slides the tick while the bar stays, so
+     the eye sees headroom opening. Nothing animates on load. */
+  transition: width 180ms ease, background 180ms ease;
+}
+
+.unit-axis-row { margin-top: 0.1rem; }
+
+.unit-axis {
+  position: relative;
+  height: 1rem;
+  font-size: 0.78rem;
+  color: var(--ink-2);
+}
+
+.unit-axis span {
+  position: absolute;
+  top: 0.25rem;
+}
+
+.unit-axis-lo { left: 0; }
+.unit-axis-hi { right: 0; }
+
+/* The rule the labels sit under, with an end tick at each end of it. */
+.unit-axis::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  border-top: 1px solid var(--grid);
+}

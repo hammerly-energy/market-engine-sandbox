@@ -129,10 +129,21 @@
         </p>
       </section>
 
-      <section class="panel" data-results data-slot>
+      <!-- Spans the row: the fleet runs 40 MW to 600 MW, and in a half-width
+           column the smallest unit's bar is four pixels and reads as zero. -->
+      <section class="panel span-all" data-results>
         <h2>Generation by Unit</h2>
-        <p class="note">Not built yet. Dispatch, headroom and reduced cost, per unit.</p>
+        <p class="note">
+          Bars are dispatch, on one MW scale shared by every unit. Ticks are
+          capacity, so the gap is headroom. Colour is the unit's identity, as in the
+          merit order.
+        </p>
         <div id="units"></div>
+        <p class="caption">
+          Status is where a unit sits, not what sets the price:
+          <code>off</code>, <code>interior</code> part-loaded,
+          <code>at_max</code> full. rc is the LMP at its bus minus its offer.
+        </p>
       </section>
 
       <!-- Spans the row: the residual is the last column, and a ledger whose
