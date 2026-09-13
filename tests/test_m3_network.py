@@ -591,6 +591,13 @@ class TestCase5Congested:
 
             LMP[i] = lambda + PTDF[DE, i] * mu[DE]
 
+        That derivation read this engine's own PTDF row, so on its own it is
+        the engine checked against itself. tests/test_m3_cross_check.py is
+        what sources these five: the same case solved in B-theta form, where
+        an LMP is one dual on one row and no PTDF exists, reaching all five
+        to 3.2e-14. case5.m has no price column, so there is no published LMP
+        to import and a second derivation is the available check.
+
         E prices at E1's own offer: it is fenced in behind a saturated
         line, so an extra MW of load there is served by the cheapest thing
         trapped on that side. D prices at 39.94, nearly D1's $40,

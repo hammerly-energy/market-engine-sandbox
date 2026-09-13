@@ -77,8 +77,13 @@ network:
 #     A1  alta        A2  park_city     C1  solitude
 #     D1  sundance    E1  brighton
 #
-# Recorded here rather than lost in the rename, because that write-up is what
-# the LMPs below are checked against.
+# Recorded here rather than lost in the rename, so a reader can find this case
+# in the literature under the names it is published with. The LMPs below are
+# NOT checked against that write-up -- case5.m carries no price column, and
+# there is no published LMP in this repo to import. They are checked against a
+# second derivation instead: tests/test_m3_cross_check.py solves the same case
+# in B-theta form, where the dual on a bus's own balance row is its LMP with
+# nothing to assemble, and reaches all five to 3.2e-14.
 fleet:
   A1: {bus: A, cost_usd_per_mwh: 14.0, pmax_mw:  40.0}
   A2: {bus: A, cost_usd_per_mwh: 15.0, pmax_mw: 170.0}

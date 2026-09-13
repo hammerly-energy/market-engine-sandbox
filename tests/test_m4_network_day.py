@@ -206,7 +206,12 @@ class TestM3RegressionAtPeak:
             assert D[bus][PEAK_HOUR] == pytest.approx(float(mw))
 
     def test_peak_hour_reproduces_m3_prices(self, day):
-        """The published PJM 5-bus LMPs, transcribed from the m3 notes."""
+        """M3's five LMPs, transcribed from the m3 notes.
+
+        Not published figures: case5.m carries no price column. They are
+        sourced by tests/test_m3_cross_check.py, which reaches the same five
+        in B-theta form without a PTDF.
+        """
         expected = {"A": 16.98, "B": 26.38, "C": 30.00, "D": 39.94, "E": 10.00}
         for bus, lmp in expected.items():
             assert day["lmp"][bus, PEAK_HOUR] == pytest.approx(lmp, abs=5e-3)

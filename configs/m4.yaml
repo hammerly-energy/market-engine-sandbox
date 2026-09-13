@@ -90,10 +90,15 @@ fleet:
 # Peak x shape, not 24 numbers per bus.
 #
 # peak_mw is m3's static load, unchanged: B 300, C 300, D 400. shape peaks at
-# exactly 1.0, so hour 18 IS m3's case, solved by the same code path. The
-# published PJM 5-bus LMPs therefore stay a live regression test at one hour of
-# this day rather than becoming a historical note -- and if M4 ever breaks M3,
-# it breaks visibly at hour 18 instead of silently everywhere.
+# exactly 1.0, so hour 18 IS m3's case, solved by the same code path. M3's five
+# LMPs therefore stay a live regression test at one hour of this day rather
+# than becoming a historical note -- and if M4 ever breaks M3, it breaks
+# visibly at hour 18 instead of silently everywhere.
+#
+# Those five are the case's own answer and not a published figure. case5.m
+# carries a dispatch and no prices; tests/test_m3_cross_check.py is what
+# sources them, by solving the same case in B-theta form and reaching all five
+# to 3.2e-14 without a PTDF.
 #
 # Hours are 0..23, as at M1. No timezone: case5 is a textbook network with no
 # location and no clock, and a fabricated UTC stamp would look like ingested

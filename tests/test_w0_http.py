@@ -38,7 +38,9 @@ from src.model.clearing import clear
 M4_CONFIG = "configs/m4.yaml"
 PEAK_HOUR = 18  # the hour where shape == 1.0, i.e. m3's published case
 
-# The published PJM 5-bus LMPs, as tests/test_m3_network.py asserts them.
+# M3's five LMPs, as tests/test_m3_network.py asserts them. Not published
+# figures -- case5.m has no price column; tests/test_m3_cross_check.py is
+# what sources them, by a second derivation in B-theta form.
 PUBLISHED_LMP = {"A": 16.9774, "B": 26.3845, "C": 30.0000, "D": 39.9427, "E": 10.0000}
 
 
