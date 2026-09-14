@@ -119,6 +119,50 @@ function hasAPrice(cleared, bus) {
   return verdict.verdict.some((v) => v !== "price_is_an_interval");
 }
 
+/* The hour the page opens on: the earliest hour whose dearest bus is the
+ * dearest price the day reaches.
+ *
+ * The seed carries hour 0, which is an array index. On case5 it is a night
+ * hour where all five buses price at $10.00, every line is idle and the
+ * congestion component is zero -- so the page opens on the one picture that
+ * shows none of what it was built to show. The peak hour has price
+ * separation across the buses, a line at its rating and a congestion term
+ * on four of the five.
+ *
+ * Scanned over the buses priceDomain scans, and for the same reason: a bus
+ * whose price is an interval in every hour has no price to compare. Its
+ * $0.00 would lose a maximum anyway, but which buses count is one question
+ * and it is answered in one place.
+ *
+ * Earliest, and it is not a formality. The peak is flat across the middle
+ * of the day -- measured on the seed, $39.942736322790935 at bus D in
+ * fifteen of the twenty-four hours, indices 7 through 21, equal to each
+ * other bitwise. Equal loads make the same LP hour to hour, which is why a
+ * strict comparison is enough here and no tolerance is needed to hold the
+ * earliest of a tie.
+ */
+export function peakHour(cleared) {
+  if (!cleared.hours.length) return null;
+  const readable = cleared.buses.filter((bus) => hasAPrice(cleared, bus));
+  const over = readable.length ? readable : cleared.buses;
+  if (!over.length) return null;
+
+  let best = -Infinity;
+  let at = 0;
+  for (let h = 0; h < cleared.hours.length; h += 1) {
+    let dearest = -Infinity;
+    for (const bus of over) {
+      const v = cleared.lmp[bus][h];
+      if (v > dearest) dearest = v;
+    }
+    if (dearest > best) {
+      best = dearest;
+      at = h;
+    }
+  }
+  return Number.isFinite(best) ? at : null;
+}
+
 /* Where a price sits on its domain, 0 at the cheap end and 1 at the dear.
    A flat day has no domain to sit on and everything takes the midpoint,
    which says "these are all the same price" rather than picking an end. */

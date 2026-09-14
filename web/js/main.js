@@ -46,6 +46,7 @@ import { renderFlows } from "./flows.js";
 import { mountGrammar } from "./grammar.js";
 import { mountTimelinePicker, renderTimeline } from "./timeline.js";
 import { renderMerit } from "./merit.js";
+import { peakHour } from "./scales.js";
 import { checkBounds, fetchSeed, stateFromSeed } from "./state.js";
 import { renderUnits } from "./units.js";
 import {
@@ -90,6 +91,10 @@ function note(id, text, state) {
 
 const editor = stateFromSeed(await fetchSeed());
 let caps = null;
+
+/* Whether an answer has ever landed. It gates the opening hour, which is
+   picked from the first solve and left alone after it. */
+let opened = false;
 
 /* The last answer that was applied. paint() reads this and nothing else, so
    moving the hour cannot reach the server and cannot invent a number. Null
@@ -217,6 +222,21 @@ async function submit() {
   note(outcome.id, "applied", "ok");
   cleared = outcome.result;
   markStale(false);
+
+  /* The opening hour, and only the opening one. The seed cannot know where
+     the day peaks -- that is an answer, so it is chosen from the first
+     answer and never again. Re-running it on every solve would move the hour
+     under a hand that is dragging a lever, and the hour is the visitor's
+     from the moment the page has one. */
+  if (!opened) {
+    opened = true;
+    const peak = peakHour(cleared);
+    if (peak !== null) {
+      editor.hour = peak;
+      syncHour();
+    }
+  }
+
   paint();
 
   const islands = Object.keys(cleared.islands).length;
