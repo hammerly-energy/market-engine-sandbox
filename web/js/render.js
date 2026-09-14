@@ -41,7 +41,6 @@ import {
   priceAt,
   priceDomain,
   priceInk,
-  rampCss,
 } from "./scales.js";
 
 const NS = "http://www.w3.org/2000/svg";
@@ -725,49 +724,6 @@ export function markStale(on) {
   }
 }
 
-/* The legend. Mandatory from W3.2, because colour on the map stopped meaning
- * identity and an unlabelled ramp is a picture of a number the reader cannot
- * read off.
- *
- * It prints its own domain. The scale is fixed across the day, so moving the
- * hour never moves these numbers -- but a new solve is a different market and
- * can leave the old domain entirely, and when it does, the bounds change on
- * screen where a visitor can see that they changed. A legend that silently
- * rescaled would make a dragged limit look like a price change.
- */
-export function renderLegend(el, cleared) {
-  const domain = cleared ? priceDomain(cleared) : null;
-  el.replaceChildren();
-
-  const ramp = document.createElement("div");
-  ramp.className = "ramp";
-  ramp.style.background = rampCss();
-  el.append(ramp);
-
-  const ends = document.createElement("p");
-  ends.className = "ramp-ends";
-  const lo = document.createElement("span");
-  const hi = document.createElement("span");
-  if (domain) {
-    lo.textContent = `$${usd(domain.lo)}`;
-    hi.textContent = `$${usd(domain.hi)}`;
-  } else {
-    lo.textContent = "—";
-    hi.textContent = "—";
-  }
-  ends.append(lo, hi);
-  el.append(ends);
-
-  const note = document.createElement("p");
-  note.className = "ramp-note";
-  note.textContent = domain
-    ? "Bus ring: LMP ($/MWh), darker and thicker is dearer. Dashed is a " +
-      "price the ramp cannot carry: none yet, or one the optimum does not " +
-      "pin. The domain is every bus with a price over the whole day; the " +
-      "hour does not rescale it."
-    : "Bus ring: LMP ($/MWh), darker and thicker is dearer. No solve yet.";
-  el.append(note);
-}
 
 /* ------------------------------------------------- W3.3, the LMP split
  *
@@ -953,7 +909,7 @@ export function renderSplit(el, cleared, hour, order) {
   }
 
   /* The axis. Two ticks and a name: the domain's ends, which are the same
-     two numbers the map's legend prints, from the same function. */
+     two numbers the band's key prints, from the same function. */
   const axis = document.createElement("div");
   axis.className = "split-axis";
   const lo = document.createElement("span");

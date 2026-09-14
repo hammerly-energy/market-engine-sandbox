@@ -179,15 +179,22 @@ function row(bus, cleared, hour, domain) {
   return el;
 }
 
-/* The footer: the control's readout on the left, the field's key on the
+/* The footer: the control's readout on the left, the panel's key on the
  * right, on one line.
  *
  * The readout is here rather than at the end of the track because the track
  * has to be exactly as wide as the band under it, and a number at its end
- * would shorten it. The key is mandatory wherever colour carries a number,
- * and it is built from rampCss and priceDomain -- the same two functions the
- * map's legend reads -- so the two keys cannot drift and cannot disagree
- * about the domain, because there is one domain.
+ * would shorten it.
+ *
+ * The key is the panel's, not the band's: the map above it inks its rings
+ * from this same domain through this same function, and it carried a second
+ * copy of this key until the two views were merged. One key, at the foot of
+ * the panel both figures sit in.
+ *
+ * It is therefore drawn as a wedge, which the map's copy was and this was
+ * not. A heatmap cell carries the price in lightness alone, but a bus ring
+ * carries it in lightness and in width, and a flat bar keys only half of
+ * that. Thin and pale at the cheap end, thick and dark at the dear one.
  */
 function footer(cleared, hour, domain) {
   const el = document.createElement("div");

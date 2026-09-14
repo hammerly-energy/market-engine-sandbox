@@ -52,7 +52,6 @@ import { renderUnits } from "./units.js";
 import {
   markStale,
   renderIslands,
-  renderLegend,
   renderNetwork,
   renderSplit,
 } from "./render.js";
@@ -122,7 +121,6 @@ function paint() {
      re-solve: the hour indexes a day already in the browser, and the ring
      colours come out of the same arrays the table below reads. */
   draw();
-  renderLegend(document.querySelector("#legend"), cleared);
 
   renderSplit(
     document.querySelector("#split"),

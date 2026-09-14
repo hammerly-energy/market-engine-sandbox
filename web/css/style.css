@@ -76,11 +76,13 @@ h1 {
   margin: 0 0 0.25rem;
 }
 
+/* No measure cap, unlike every other run of prose on the page: this is one
+   sentence of orientation above the frame, and it runs the window's width so
+   it reads as the page's line rather than as the first panel's. */
 .subhead {
   font-size: var(--type-annot);
   color: var(--ink-2);
   margin: 0 0 1.5rem;
-  max-width: 60ch;
 }
 
 .panel {
@@ -708,9 +710,10 @@ button.undo {
        496, so the rail may not be set to a round number instead.
 
    This supersedes W2.7's "results sit above the levers". The reason there was
-   that a moved slider must not land its answer below the fold; a sticky rail
-   serves it for every view rather than for the two that happened to be above
-   the levers. */
+   that a moved slider must not land its answer below the fold; the two-column
+   frame serves it for every view rather than for the two that happened to be
+   above the levers. The rail was sticky as well until the scrollbar that cost
+   was measured against what it bought -- see .rail below. */
 
 .masthead { margin-bottom: 1.25rem; }
 
@@ -721,17 +724,20 @@ button.undo {
   align-items: start;
 }
 
-/* Taller than the viewport, because the map carries two captions. A sticky
-   element taller than its viewport pins at the wrong end and the levers stay
-   below the fold, which is what sticking was for -- so the rail gets its own
-   scroll and keeps it to itself. */
-.rail {
-  position: sticky;
-  top: 1.5rem;
-  max-height: calc(100vh - 3rem);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
+/* The rail scrolls with the page, and that reverses the sticky rail above.
+   It was taller than the viewport, and a sticky element that is pins at the
+   wrong end, so it was given its own scroll to keep the levers reachable,
+   and the page then had two scrollbars a few hundred pixels apart. A pointer
+   over the map scrolled the rail and a pointer an inch to its right scrolled
+   the document, which is the kind of thing a visitor reads as the page being
+   broken rather than as a choice.
+
+   One scroll instead. What sticking was for -- a lever and the view it moves
+   on screen together -- is served by the two-column frame itself at any
+   window tall enough to show both, and the rail is shorter than it was:
+   merging the band into the Network panel took its heading, its padding and
+   the map's two captions out. */
+.rail { align-self: start; }
 
 .views {
   display: grid;
@@ -776,11 +782,9 @@ button.undo {
 .panel[data-slot] .note { color: var(--ink-wire); }
 
 /* Below this the rail and the views do not both fit: 533px of map, a 1rem
-   gap and 22rem of view is 901px. One column, and the rail stops sticking --
-   a sticky element taller than the viewport scrolls badly. */
+   gap and 22rem of view is 901px. One column, the rail above the views. */
 @media (max-width: 60rem) {
   .frame { grid-template-columns: minmax(0, 1fr); }
-  .rail { position: static; }
 }
 
 /* Buttons had no focus ring of their own, so they took Chrome's default --
@@ -797,41 +801,6 @@ button:focus-visible {
 .toolbar button[aria-pressed="true"]:focus-visible,
 button[aria-pressed="true"]:focus-visible {
   outline-color: var(--surface);
-}
-
-/* ------------------------------------------------- W3.2, the price legend
-   Mandatory the moment colour stops meaning identity: an unlabelled ramp is
-   a picture of a number the reader cannot read off. The bounds are printed
-   because the domain is fixed across the day but not across the session, so
-   a solve that leaves the old domain says so here. */
-
-.legend { margin-top: 0.6rem; }
-
-/* A wedge, not a bar: the ring carries the price in lightness and in width,
-   and a flat bar would key only half of that. Thin and pale at the cheap end,
-   thick and dark at the dear one, which is the mark itself unrolled.
-
-   The gradient is built in render.js from the same function that inks the
-   rings, so the key cannot drift from the marks it explains. */
-.ramp {
-  height: 0.9rem;
-  clip-path: polygon(0 38%, 100% 0, 100% 100%, 0 62%);
-}
-
-.ramp-ends {
-  display: flex;
-  justify-content: space-between;
-  margin: 0.2rem 0 0;
-  font-size: var(--type-annot);
-  color: var(--ink-2);
-  font-variant-numeric: tabular-nums;
-}
-
-.ramp-note {
-  margin: 0.35rem 0 0;
-  font-size: var(--type-annot);
-  color: var(--ink-2);
-  max-width: 60ch;
 }
 
 /* ---------------------------------------------------- W3.3, the LMP split
@@ -1353,7 +1322,12 @@ button[aria-pressed="true"]:focus-visible {
    Under a fifth of a column, and the same at both ends rather than drifting
    across the day. 4.6rem is what Play needs at 7ch plus its padding; the bus
    names need far less and take the same column so the two rows line up. */
-.timeline { --tl-name: 4.6rem; }
+/* W3.12: the band lives in the Network panel, so the token and the gap that
+   used to come from a panel of its own live on the wrapper instead. */
+.day {
+  --tl-name: 4.6rem;
+  margin-top: 0.8rem;
+}
 
 /* The slider row, restyled to the field's grid. Its readout is dropped --
    "Hour 19 of 24" is printed once, in the footer, where it sits beside the
@@ -1527,9 +1501,17 @@ button[aria-pressed="true"]:focus-visible {
 
 .tl-key-name { white-space: nowrap; }
 
+/* A wedge, not a bar, since the merge at W3.12 made this the panel's one
+   key: a heatmap cell carries the price in lightness alone, but a bus ring
+   on the map above carries it in lightness and in width, and a flat bar
+   keys only half of that. The mark itself, unrolled.
+
+   The gradient is built in timeline.js from the same function that inks both
+   figures, so the key cannot drift from what it explains. */
 .tl-ramp {
   width: 7rem;
-  height: 0.5rem;
+  height: 0.75rem;
+  clip-path: polygon(0 33%, 100% 0, 100% 100%, 0 67%);
 }
 
 /* Under the ramp and as wide as it, so each number sits at the end it names.

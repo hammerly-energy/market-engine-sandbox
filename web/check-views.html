@@ -1,6 +1,12 @@
 <!doctype html>
 <meta charset="utf-8">
 <title>views check</title>
+<!-- The app's stylesheet, because W3.12 asserts a computed colour: an
+     unpriced ring is painted var(--ink-muted), and a page that does not
+     define that token reads the ring as stroke: none and the assertion
+     passes for the wrong reason. The harness's own rules follow it and win
+     the few properties they set. -->
+<link rel="stylesheet" href="css/style.css">
 <style>
  body{font:13px ui-monospace,Menlo,monospace;margin:12px;background:#fcfcfb}
  li{margin:2px 0}
@@ -38,7 +44,7 @@
 <script type="module">
 import { fetchSeed, stateFromSeed } from "./js/state.js";
 import { postClear } from "./js/api.js";
-import { verdictNote, verdictLabel, verdictFor } from "./js/render.js";
+import { verdictNote, verdictLabel, verdictFor, renderNetwork } from "./js/render.js";
 import { priceDomain } from "./js/scales.js";
 import { mountTimelinePicker, renderTimeline } from "./js/timeline.js";
 
@@ -227,12 +233,54 @@ try {
         host.querySelector(".tl-readout").textContent === "Hour 5 of 24",
         host.querySelector(".tl-readout").textContent);
 
-  /* The key is built from the same domain the map's legend prints, so the
-     two cannot disagree about what a grey is worth. */
+  /* The key is built from the same domain the rings are inked from, so the
+     panel's one key cannot disagree with either figure about what a grey is
+     worth. */
   check("the key prints the domain the map prints",
         host.querySelector(".tl-ends").textContent ===
           `$${after.lo.toFixed(2)}$${after.hi.toFixed(2)}`,
         host.querySelector(".tl-ends").textContent);
+
+  /* ------------------------------- W3.12, one scale across the merged panel
+
+     The map and the band sit in one panel under one key, so a ring and the
+     cell beneath it have to be the same grey at the same hour. They are
+     drawn by different modules from the same two functions, priceInk on
+     priceDomain, and this asserts the result rather than the wiring: the
+     cell's computed background against the ring's stroke, bus by bus.
+
+     Z is the exception and it is the W3.9 one, not a drift: a bus whose
+     price is an interval in every hour is off the domain, so the map draws
+     it at NO_PRICE while the band still inks the number the engine returned.
+     Asserted as an exception here so that it stays one. */
+  const canvas = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  document.body.append(canvas);
+  renderNetwork(canvas, state, withZ, 18);
+  const band = document.createElement("div");
+  band.style.display = "none";
+  document.body.append(band);
+  renderTimeline(band, withZ, 18, order);
+
+  const cellAt = (bus, t) =>
+    getComputedStyle(band.querySelectorAll(".tl-band")[order.indexOf(bus)]
+      .children[t]).backgroundColor;
+  const ringAt = (bus) =>
+    getComputedStyle(canvas.querySelector(`[data-bus="${bus}"] .disc`)).stroke;
+
+  const priced = order.filter((b) => b !== "Z");
+  const drift = priced.filter((b) => ringAt(b) !== cellAt(b, 18));
+  check("a ring and its cell are the same grey",
+        drift.length === 0,
+        drift.length
+          ? drift.map((b) => `${b}: ${ringAt(b)} vs ${cellAt(b, 18)}`).join(", ")
+          : priced.map((b) => `${b} ${ringAt(b)}`).join("  "));
+
+  check("and an interval-priced bus is the stated exception",
+        ringAt("Z") !== cellAt("Z", 18),
+        `ring ${ringAt("Z")}, cell ${cellAt("Z", 18)}`);
+
+  canvas.remove();
+  band.remove();
 
   document.querySelector("#diff").textContent =
     `domain without Z   $${before.lo.toFixed(4)} to $${before.hi.toFixed(4)}\n` +

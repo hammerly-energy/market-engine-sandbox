@@ -177,8 +177,8 @@ export function priceInk(v, domain) {
   return greyFromL(L_CHEAP + (L_DEAR - L_CHEAP) * priceAt(v, domain));
 }
 
-/* The ramp as CSS, for the legend. Built from priceInk so the legend cannot
-   drift from the marks it explains. */
+/* The ramp as CSS, for the key. Built from priceInk so the key cannot drift
+   from the marks it explains. */
 export function rampCss(steps = 9) {
   const stops = [];
   for (let i = 0; i < steps; i += 1) {

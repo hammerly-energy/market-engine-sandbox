@@ -10,9 +10,9 @@
   <header class="masthead">
     <h1>Market Engine</h1>
     <p class="subhead">
-      Nodal DC clearing. LP dispatch, duals as prices. Five synthetic
-      generators on a five-bus case. No unit commitment, no storage, no
-      reserves, no losses, no validation against real prices.
+      This is an interactive electricity market sandbox. Add generators,
+      loads, connections and see how the local price of electricity
+      fluctuates throughout a given day.
     </p>
   </header>
 
@@ -34,25 +34,20 @@
              aria-label="The network: buses, the branches between them, and the
                          generators at each bus. Tab to a mark and press Enter
                          to apply the armed mode."></svg>
-        <div class="legend" id="legend" data-results></div>
-        <p class="caption" id="network-caption">
-          A disc is a bus and its ring is the LMP; the outer ring is the slack. A
-          square is a generator — details on hover. A wire's width is its flow and
-          its colour the direction. A dashed ring is a price the ramp cannot
-          carry — none yet, or one the optimum does not pin. Hover says which.
-        </p>
-      </section>
+        <!-- W3.11. The hour lever and the field it indexes, as one control:
+             the track runs the width of the band under it, so the thumb sits
+             on the column it names.
 
-      <!-- W3.11. The hour lever and the field it indexes, as one control.
-           The track runs the width of the band over the same 24 hours, so
-           the thumb sits on the column it names. The hour left the Levers
-           panel to come here: the other six levers declare something the
-           engine must answer for, and this one walks an answer already in
-           the browser. -->
-      <section class="panel timeline" data-results>
-        <h2>Timeline</h2>
-        <div id="hour"></div>
-        <div id="timeline"></div>
+             In this panel rather than its own, because it is the same figure
+             one dimension over -- the map is five buses at one hour and the
+             band is those buses across the day, inked from the one domain by
+             the one function. Two panels made that two keys and two captions
+             saying the same thing twice, and the map's key is the half that
+             went: the band's footer prints the domain for both. -->
+        <div class="day" data-results>
+          <div id="hour"></div>
+          <div id="timeline"></div>
+        </div>
       </section>
 
       <section class="panel">
