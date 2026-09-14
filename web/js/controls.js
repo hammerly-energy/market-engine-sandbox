@@ -2,7 +2,8 @@
  *
  *   line limit     -> state.limits[line], which is clear()'s limits= Argument
  *                     and not a config edit
- *   peak load      -> bid.peak_mw
+ *   peak load      -> bid.peak_mw, one row per bus, and zero on that row
+ *                     removes the bid rather than declaring a 0 MW one
  *   generator pmax -> gen.pmax_mw
  *   generator cost -> gen.cost_usd_per_mwh
  *   hour 1-24      -> state.hour, which does not re-solve
@@ -31,6 +32,7 @@
  * site can show (CLAUDE.md, "Degeneracy under a moving slider").
  */
 
+import { bidNameFor, bidsAt, setBidPeak } from "./edits.js";
 import { UNLIMITED } from "./state.js";
 
 /* ----------------------------------------------------------- slider domains
@@ -405,35 +407,74 @@ export function mountLevers(root, state, { onEdit }) {
   }
   root.append(fleet);
 
-  /* ---- demand. Per bid, not per bus, even though CLAUDE.md's lever list
-     says "peak load per bus" -- because two bids at one bus is a demand curve
-     and not a collision, and a per-bus slider would have to pick one of them
-     to move or split the move between them. Both are inventions. The bid is
-     the named object the engine prices, so the bid is what carries a lever.
+  /* ---- demand. A row per bus, and the row exists whether that bus has a
+     bid or not: 0 MW is a bus with no demand, and raising the slider off zero
+     declares one. Before this the group iterated state.bids, so A and E --
+     the two buses case5 seeds no load at -- had no row at all and no way to
+     grow one, which made "where load sits" a property of the seed rather than
+     something a visitor could change.
 
-     The value each bid places is NOT a lever here. Every seeded bid is firm,
-     at the offer cap; dropping one below an LMP turns it into demand response,
-     which is M9(a)'s figure and a config line, not a slider on this page. */
+     That reverses this block's earlier per-bid rule. The reasoning there was
+     that two bids at one bus is a demand curve and not a collision, so a
+     per-bus slider would have to pick one of them to move. It still would --
+     so a bus carrying more than one bid keeps a row per bid and no creation,
+     and the per-bus row is for the one-or-none case the editor can actually
+     produce. The row is labelled with the bid's name, existing or not, so it
+     names the object it declares.
+
+     The value each bid places is NOT a lever here. Every bid the editor makes
+     is firm, at the offer cap; dropping one below an LMP turns it into demand
+     response, which is M9(a)'s figure and a config line, not a slider on this
+     page. */
   const demand = group(
     "Demand Bids",
-    "Peak MW per bid, scaled by the 24-hour shape. Every bid is firm, at " +
-      "the offer cap.",
+    "Peak MW per bid, scaled by the 24-hour shape. Zero is a bus with no " +
+      "bid. Every bid is firm, at the offer cap.",
   );
-  for (const [name, bid] of Object.entries(state.bids)) {
+  for (const bus of state.buses) {
+    const here = bidsAt(state.bids, bus.name);
+
+    /* Hand-written configs only: the editor makes at most one bid per bus.
+       These rows move a bid that exists and never create or destroy one. */
+    if (here.length > 1) {
+      for (const [name, bid] of here) {
+        const s = slider({
+          name: `${name} (${bus.name})`,
+          min: 0,
+          max: PEAK_MAX_MW,
+          step: PEAK_STEP_MW,
+          value: Math.min(bid.peak_mw, PEAK_MAX_MW),
+          format: mw,
+          onInput: (v) => {
+            bid.peak_mw = v;
+            onEdit();
+          },
+        });
+        demand.append(s.row);
+        syncs.push(() => s.sync(Math.min(bid.peak_mw, PEAK_MAX_MW)));
+      }
+      continue;
+    }
+
+    /* By name, not by object. The slider deletes the bid at zero and makes
+       another with the same name on the way back up, so a closure over the
+       object would be writing into a deleted one from the first step. */
+    const name = bidNameFor(state, bus.name);
+    const peak = () => Math.min(state.bids[name]?.peak_mw ?? 0, PEAK_MAX_MW);
     const s = slider({
-      name: `${name} (${bid.bus})`,
+      name: `${name} (${bus.name})`,
       min: 0,
       max: PEAK_MAX_MW,
       step: PEAK_STEP_MW,
-      value: Math.min(bid.peak_mw, PEAK_MAX_MW),
+      value: peak(),
       format: mw,
       onInput: (v) => {
-        bid.peak_mw = v;
+        setBidPeak(state, bus.name, name, v);
         onEdit();
       },
     });
     demand.append(s.row);
-    syncs.push(() => s.sync(Math.min(bid.peak_mw, PEAK_MAX_MW)));
+    syncs.push(() => s.sync(peak()));
   }
   root.append(demand);
 

@@ -26,7 +26,7 @@
  * to keep in step with the figures, for a fill that is scheduled to go.
  */
 
-import { defaultBranch, defaultGenerator, inField } from "./state.js";
+import { defaultBid, defaultBranch, defaultGenerator, inField } from "./state.js";
 
 /* ------------------------------------------------------------------ naming
  *
@@ -208,6 +208,65 @@ export function removeGenerator(state, name) {
 
 export function generatorsAt(fleet, bus) {
   return Object.entries(fleet).filter(([, spec]) => spec.bus === bus);
+}
+
+/* -------------------------------------------------------------------- bids
+ *
+ * Every bus can carry demand. Before this, only the three buses the seed
+ * names a bid at could: the Demand Bids group iterated state.bids, so A and E
+ * had no row and no way to grow one. Load is a declaration about a bus, not a
+ * property of the three buses that happened to start with some.
+ *
+ * A bid is created by raising its peak off zero and removed by dragging it
+ * back, which is a structural edit made with a slider rather than with the
+ * armed grammar. The grammar is for marks on the map and a bid has none; the
+ * alternative was to design one, and that is a W3 decision about what the map
+ * encodes, not a lever.
+ *
+ * Zero removes rather than declaring a 0 MW bid, for two reasons. A bid that
+ * can take nothing is a bid that should be deleted -- Branch's rule about a
+ * line rated 0, one object over -- and an editor that emitted one per empty
+ * bus would post five bids where the seed has three, counting each against
+ * max_bids and putting a participant into the merit view that takes no power.
+ */
+
+export function bidsAt(bids, bus) {
+  return Object.entries(bids).filter(([, spec]) => spec.bus === bus);
+}
+
+/* The name the row at this bus declares -- the bid already there, or the one
+   that would be created. `<bus>_firm` is the seed's own scheme (B_firm,
+   C_firm, D_firm), so a bid added at A is named the way the three that shipped
+   are, and the suffix is what a second bid at one bus would take. A name is
+   what the wire carries and what the merit view prints, so the row is labelled
+   with it whether the bid exists yet or not: the row names the object it
+   declares, and 0 MW is how it says that object is not there. */
+export function bidNameFor(state, bus) {
+  const here = bidsAt(state.bids, bus);
+  if (here.length > 0) return here[0][0];
+  const taken = new Set(Object.keys(state.bids));
+  const base = `${bus}_firm`;
+  if (!taken.has(base)) return base;
+  for (let n = 2; ; n += 1) {
+    const name = `${base}${n}`;
+    if (!taken.has(name)) return name;
+  }
+}
+
+/* Set one bid's peak, creating or removing it at the ends of the travel.
+ *
+ * Keyed by name rather than by an object reference, because the slider that
+ * calls this deletes the object it is moving and then makes another one with
+ * the same name. A closure over the bid would be writing into a deleted
+ * object from the first step past zero.
+ */
+export function setBidPeak(state, bus, name, mw) {
+  if (mw <= 0) {
+    delete state.bids[name];
+    return;
+  }
+  if (!(name in state.bids)) state.bids[name] = defaultBid(bus, state.offerCap);
+  state.bids[name].peak_mw = mw;
 }
 
 /* ------------------------------------------------------------------- undo

@@ -193,6 +193,33 @@ check("the viewBox does not move with the topology",
   svg.getAttribute("viewBox") === boxBefore,
   `${boxBefore} -> ${svg.getAttribute("viewBox")}`);
 
+// --- the demand lever: every bus has a row, whether it has a bid or not.
+// case5 seeds load at B, C and D only, so bus A is the case: no bid, a row,
+// and a slider that declares one. Driven through the real input, so this
+// asserts the wiring from the row to the posted body and not just the edit.
+const lever = (label) => doc.querySelector(`input[aria-label="${label}"]`);
+const drag = async (input, v) => {
+  input.value = String(v);
+  input.dispatchEvent(new win.Event("input", {bubbles:true}));
+  await wait();
+};
+check("a bus with no bid still gets a row", !!lever("A_firm (A)"));
+check("and it sits at zero", lever("A_firm (A)").value === "0");
+await drag(lever("A_firm (A)"), 100);
+check("raising it off zero declares a bid", "A_firm" in cfg().load.bids,
+  Object.keys(cfg().load.bids).join(","));
+check("the new bid is at bus A and 100 MW",
+  cfg().load.bids.A_firm?.bus === "A" && cfg().load.bids.A_firm?.peak_mw === 100);
+check("and it is firm, at the offer cap",
+  cfg().load.bids.A_firm?.value_usd_per_mwh === 5000,
+  String(cfg().load.bids.A_firm?.value_usd_per_mwh));
+await drag(lever("A_firm (A)"), 0);
+check("dragging back to zero removes it, rather than posting a 0 MW bid",
+  !("A_firm" in cfg().load.bids), Object.keys(cfg().load.bids).join(","));
+await drag(lever("B_firm (B)"), 200);
+check("a seeded bid's row still moves that bid",
+  cfg().load.bids.B_firm?.peak_mw === 200, String(cfg().load.bids.B_firm?.peak_mw));
+
 const bad = results.filter(r => !r).length;
 const head = document.createElement("li");
 head.className = bad ? "bad" : "ok";
