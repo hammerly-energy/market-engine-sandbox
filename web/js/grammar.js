@@ -126,8 +126,9 @@ function markAt(node) {
   return { kind: "generator", name: el.dataset.gen, el };
 }
 
-/* Client pixels to viewBox user units. The viewBox is fitted to the topology
-   and changes as buses move, so this cannot be a constant scale. */
+/* Client pixels to viewBox user units. The viewBox is the editor's field and
+   is fixed (render.js), so this is one scale -- but it is still read from the
+   CTM rather than computed, because the figure's rendered width is not. */
 function pointIn(svg, event) {
   const ctm = svg.getScreenCTM();
   if (!ctm) return { x: 0, y: 0 };

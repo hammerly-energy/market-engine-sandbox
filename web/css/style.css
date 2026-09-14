@@ -212,11 +212,16 @@ button:disabled {
    spread over a full viewport of height. The cap sets the density; render.js
    measures the rendered width rather than assuming this number, so the two
    cannot silently disagree again. */
+/* Square, and stated here rather than left to the viewBox. height: auto took
+   the box's aspect ratio, so the panel had no height until the first draw and
+   then took whatever shape the buses happened to be in. The viewBox is square
+   too (render.js), so this states the same ratio twice on purpose: the panel
+   holds its height from first paint, before any topology exists to fit. */
 #network {
   display: block;
   width: 100%;
   max-width: 496px;
-  height: auto;
+  aspect-ratio: 1;
   overflow: visible;
 }
 

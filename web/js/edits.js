@@ -26,7 +26,7 @@
  * to keep in step with the figures, for a fill that is scheduled to go.
  */
 
-import { defaultBranch, defaultGenerator } from "./state.js";
+import { defaultBranch, defaultGenerator, inField } from "./state.js";
 
 /* ------------------------------------------------------------------ naming
  *
@@ -91,7 +91,7 @@ export function nextGeneratorName(state, bus) {
 
 export function addBus(state, x, y) {
   const name = nextBusName(state);
-  state.buses.push({ name, x, y });
+  state.buses.push({ name, x: inField(x), y: inField(y) });
   return name;
 }
 
@@ -131,11 +131,15 @@ export function removeBus(state, name) {
   }
 }
 
+/* The one place a drag writes a coordinate, so the clamp is here rather than
+   in the pointer handler: the keyboard path and any later caller get it too.
+   A pointer dragged past the edge pins the bus to the edge and keeps dragging,
+   which is the behaviour of every canvas that has a boundary. */
 export function moveBus(state, name, x, y) {
   const bus = state.buses.find((b) => b.name === name);
   if (bus) {
-    bus.x = x;
-    bus.y = y;
+    bus.x = inField(x);
+    bus.y = inField(y);
   }
 }
 
@@ -154,7 +158,14 @@ export function placementFor(state) {
       20,
     ) * 1.35;
   const angle = state.buses.length * 2.399963; // the golden angle, radians
-  return { x: cx + reach * Math.cos(angle), y: cy + reach * Math.sin(angle) };
+  /* Clamped like a drag, so a reach that runs off the field lands on its edge
+     instead of outside it. Buses can then land on top of each other at the
+     edge, and drag is the answer to that -- the same answer as before, and
+     preferable to a placement that quietly rescales the whole map. */
+  return {
+    x: inField(cx + reach * Math.cos(angle)),
+    y: inField(cy + reach * Math.sin(angle)),
+  };
 }
 
 /* ---------------------------------------------------------------- branches */

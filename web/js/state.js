@@ -37,6 +37,33 @@ function wireLimit(mw) {
   return mw === UNLIMITED ? "inf" : mw;
 }
 
+/* ------------------------------------------------------------------- field
+ *
+ * The editor's coordinate field. Every bus centre is clamped into it, and
+ * render.js draws that same field at a fixed viewBox, so the scale of the
+ * drawing is a constant: a bus cannot be dragged somewhere that shrinks the
+ * map, because there is no somewhere outside this square.
+ *
+ *     0 ---- INSET ------------------------ 100 - INSET ---- 100
+ *            |  bus centres live in here  |
+ *            |  marks hang off them into the inset
+ *
+ * INSET is the reach of what hangs off a bus. The furthest mark is a
+ * generator square, genLift 35 px out plus its genSide 13 px hit box, which
+ * at the field's 100 units over the figure's 496 px rendered width is
+ *
+ *     (35 + 13) / 496 * 100 = 9.7 units
+ *
+ * so 10. Three or more units at one bus spread perpendicular and reach ~10.7;
+ * they draw past the box rather than being clipped, because #network is
+ * overflow: visible. The inset keeps the ordinary case inside its panel, not
+ * every case -- containment is the courtesy here and a fixed scale is the
+ * point.
+ */
+export const FIELD = { min: 10, max: 90 };
+
+export const inField = (n) => Math.min(FIELD.max, Math.max(FIELD.min, n));
+
 /* ------------------------------------------------------------------ the seed
  *
  * web/data/case5.json is configs/w1.yaml restated as JSON, asserted equal to
@@ -58,10 +85,15 @@ export function stateFromSeed(seed) {
     /* Buses are an ordered list, not an object. Order is load-bearing: the
        engine takes buses[0] when a recorded slack is gone, and colour is
        assigned by identity in config order. */
+    /* Clamped like an edit. The seed is hand-maintained and nothing asserts
+       its coordinates, so a value outside the field would be drawn outside
+       the fixed viewBox -- over the legend, since #network is overflow:
+       visible -- and the one state the clamp exists to prevent would arrive
+       on load. */
     buses: config.network.buses.map((name) => ({
       name,
-      x: seed.coords[name].x,
-      y: seed.coords[name].y,
+      x: inField(seed.coords[name].x),
+      y: inField(seed.coords[name].y),
     })),
     branches: Object.fromEntries(
       Object.entries(config.network.branches).map(([name, spec]) => [

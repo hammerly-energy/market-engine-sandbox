@@ -172,6 +172,27 @@ check("a drag says it moved the bus", armed().includes("Moved bus B"), armed());
 check("a drag posts nothing", doc.querySelectorAll("#log li").length === posted,
   `${posted} -> ${doc.querySelectorAll("#log li").length}`);
 
+// --- the field, and the guardrail on it.
+// A bus dragged far past the edge pins to the field and the drawing does not
+// rescale: the viewBox is the field itself and does not move, which is what
+// keeps the panel from changing shape mid-drag.
+const boxBefore = svg.getAttribute("viewBox");
+const at2 = center(bus("B"));
+const far = (n) => ({bubbles:true, cancelable:true, pointerId:1, button:0,
+  clientX: at2.clientX + n, clientY: at2.clientY - n});
+bus("B").dispatchEvent(new win.PointerEvent("pointerdown", far(0)));
+svg.dispatchEvent(new win.PointerEvent("pointermove", far(4000)));
+svg.dispatchEvent(new win.PointerEvent("pointerup", far(4000)));
+await wait();
+const disc = bus("B").querySelector("circle");
+const bx = Number(disc.getAttribute("cx"));
+const by = Number(disc.getAttribute("cy"));
+check("a drag past the edge pins the bus to the field",
+  bx <= 90.001 && by >= 9.999, `x ${bx.toFixed(2)}, y ${by.toFixed(2)}`);
+check("the viewBox does not move with the topology",
+  svg.getAttribute("viewBox") === boxBefore,
+  `${boxBefore} -> ${svg.getAttribute("viewBox")}`);
+
 const bad = results.filter(r => !r).length;
 const head = document.createElement("li");
 head.className = bad ? "bad" : "ok";

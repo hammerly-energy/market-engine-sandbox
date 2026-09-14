@@ -173,29 +173,26 @@ function labelDirection(bus, branches, at) {
   return { x: -ux / len, y: -uy / len };
 }
 
-/* The viewBox the drawing needs, padded. Fitted to the buses rather than
-   fixed at the editor's 0-100 field, because a fixed box wastes half the
-   panel on empty ground at case5's extent and would clip the moment a bus is
-   dragged outside it. A floor on the span keeps a one-bus or two-bus network
-   from being blown up to fill the panel. */
-function viewBox(buses) {
-  if (buses.length === 0) return { x: 0, y: 0, w: 100, h: 100, span: 100 };
-  const xs = buses.map((b) => b.x);
-  const ys = buses.map((b) => b.y);
-  const lo = { x: Math.min(...xs), y: Math.min(...ys) };
-  const hi = { x: Math.max(...xs), y: Math.max(...ys) };
-  const span = Math.max(hi.x - lo.x, hi.y - lo.y, 40);
-  const pad = span * 0.14;
-  const w = Math.max(hi.x - lo.x, span * 0.5) + 2 * pad;
-  const h = Math.max(hi.y - lo.y, span * 0.5) + 2 * pad;
-  return {
-    x: (lo.x + hi.x) / 2 - w / 2,
-    y: (lo.y + hi.y) / 2 - h / 2,
-    w,
-    h,
-    span: Math.max(w, h),
-  };
-}
+/* The viewBox: the editor's field, fixed, and the same square at every
+   topology. It used to be fitted to the buses, which made both the panel's
+   shape and the drawing's scale a function of where the buses happened to be
+   -- dragging B up from the seed layout took the extent to 64.6 x 231 and the
+   map grew past the window with it, and a square-but-still-fitted box traded
+   that for a drawing that shrank instead.
+
+   Neither is wanted, so the scale is not a variable at all. edits.js clamps
+   every bus centre into FIELD, 10 to 90, and this draws 0 to 100: what a
+   drag can reach is exactly what is on screen, at one scale, forever. A mark
+   is therefore the same size in every network the editor can build, which is
+   what lets render.js state its type sizes in px at all.
+
+   The cost, measured at the seed coordinates: their extent is 80 of the
+   field's 100 units, so the drawing spans 397 px of the figure's 496 against
+   387 px under the fitted box. The seed was respread to pay that -- see
+   web/data/case5.json, whose coordinates are editor state and are asserted
+   by nothing but their bus names. */
+const FIELD_BOX = { x: 0, y: 0, w: 100, h: 100, span: 100 };
+
 
 /* The network as the editor declares it, not as a solve returned it. Two
    reasons, and the second is the load-bearing one:
@@ -218,7 +215,7 @@ export function renderNetwork(svg, state, cleared = null, hour = 0) {
      that is otherwise drawn immediately. */
   const fleetOrder = Object.keys(state.fleet);
 
-  const box = viewBox(state.buses);
+  const box = FIELD_BOX;
   svg.setAttribute("viewBox", `${box.x} ${box.y} ${box.w} ${box.h}`);
   const s = box.span;
   /* The price scale for this solve. Null before the first one lands and for
