@@ -1323,3 +1323,217 @@ button[aria-pressed="true"]:focus-visible {
   top: 0;
   border-top: 1px solid var(--grid);
 }
+
+/* ------------------------------------------- W3.11, the Timeline
+   The hour lever and the field it indexes, as one control. The track and the
+   band share a column grid, so they are the same 24 hours at the same width
+   and the thumb sits over the column it names. --tl-name is what makes that
+   true: one token for the name column, read by the slider row and by every
+   bus row. */
+
+/* One token for the name column, read by the slider row and by every bus
+   row. It is what makes the track and the band the same 24 hours at the same
+   width, which is this panel's one geometric claim. Measured, not asserted:
+
+       input   125.0 .. 538.6   w = 413.6
+       band    125.0 .. 538.6   w = 413.6      delta 0.0 at both ends
+
+   The thumb and the cell it names do not land on exactly the same centre,
+   and cannot: a range input's travel is the track minus the thumb, so the
+   thumb centre runs 125 + 5.6 to 538.6 - 5.6, while a cell centre runs
+   125 + 8.5 to 538.6 - 8.5 over 24 columns and three 2px breaks.
+
+       2.9 px apart at either end, on a 17 px column
+
+   Under a fifth of a column, and the same at both ends rather than drifting
+   across the day. 4.6rem is what Play needs at 7ch plus its padding; the bus
+   names need far less and take the same column so the two rows line up. */
+.timeline { --tl-name: 4.6rem; }
+
+/* The slider row, restyled to the field's grid. Its readout is dropped --
+   "Hour 19 of 24" is printed once, in the footer, where it sits beside the
+   key rather than at the end of the track. A number at the track's end would
+   shorten the track, and the track has to be exactly as wide as the band. */
+#hour .lever[data-kind="index"] {
+  grid-template-columns: var(--tl-name) minmax(0, 1fr);
+  gap: 0 0.55rem;
+  padding: 0 0 0.15rem;
+}
+
+#hour .lever-value { display: none; }
+
+#hour button.transport { width: 100%; min-width: 0; }
+
+.tl-group { margin: 0 0 0.4rem; }
+
+.tl-island {
+  margin: 0 0 0.3rem;
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+}
+
+/* The rows are separated, unlike W3.10's contiguous block. A gap and a
+   hairline make each bus its own series rather than one surface with five
+   bands in it, which is the right reading: five prices, not a
+   two-dimensional quantity. */
+.tl-row {
+  display: grid;
+  grid-template-columns: var(--tl-name) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.28rem;
+  font-size: var(--type-annot);
+}
+
+/* Right-aligned, so a name sits against the band it labels rather than
+   against the panel edge. */
+.tl-name {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* The slack's ring, the same mark the map puts around that bus. Hollow, and
+   at --ink-2 rather than --ink, because it annotates the name rather than
+   competing with it. */
+.tl-slack {
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 1px solid var(--ink-2);
+  border-radius: 50%;
+}
+
+/* One column per hour, and they are equal: an hour is an hour, so a column
+   sized to its content would make a wide hour out of a long number.
+
+   The hairline is a box-shadow rather than a border. A border would add 2px
+   to the band's width and the track above it would stop being the same 24
+   hours at the same width, which is the one geometric claim this panel
+   makes. */
+.tl-band {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  height: 0.95rem;
+  box-shadow: 0 0 0 1px var(--grid);
+}
+
+/* A bus the answer does not carry. Dashed rather than a pale fill, for the
+   reason the map's unpriced ring is dashed: a pale fill is the cheap end of
+   the ramp and would assert a price of zero. */
+.tl-band-empty {
+  box-shadow: none;
+  border: 1px dashed var(--ink-muted);
+}
+
+.tl-cell {
+  height: 100%;
+  position: relative;
+  /* Continuity: a lever moves and the field re-inks in place, so the eye can
+     follow which hour darkened. Nothing animates on load. */
+  transition: background 180ms ease;
+}
+
+/* The six-hour rhythm, carried by two pixels of surface rather than by a
+   rule. A gridline over a cell is a line struck through the datum. The
+   slider above carries no ticks, because these are the stronger mark and the
+   two could not be made to line up -- see the measurement in controls.js. */
+.tl-sixth { margin-left: 2px; }
+
+/* The hour the thumb is on, and every other view with it. An outline per
+   cell rather than one box around the column: the column crosses island
+   groups and separated rows, and a single box would have to span them.
+
+   --surface, not --ink, and that is a correction made by rendering the
+   picture and looking at it. The cursor sits on a cell, and the cell's ink
+   runs to #242424 at the dear end of the ramp:
+
+       --ink     #0b0b0b on #242424    1.31:1    the cursor vanished
+       --surface #fcfcfb on #242424   15.12:1
+                 #fcfcfb on #919191    3.07:1    the cheap end, worst case
+
+   So the cursor takes a contrasting ink for the same reason the interval dot
+   does, and clears the 3:1 a non-text mark is held to at both ends. */
+.tl-cell.tl-now {
+  outline: 1px solid var(--surface);
+  outline-offset: -1px;
+  z-index: 1;
+}
+
+/* An hour the optimum pins no single price. The cell keeps its ink and takes
+   a hollow dot on top: the flag qualifies the number, it does not replace
+   it. The two measurements above are this mark's as well. */
+.tl-cell.tl-interval::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0.3rem;
+  height: 0.3rem;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--surface);
+  border-radius: 50%;
+}
+
+/* The pick. The affordance is on the panel rather than on the cell, so a
+   field rendered without a picker -- the check page renders one detached --
+   carries no pointer for a click that would do nothing.
+
+   Hover takes the cursor's mark, dashed. Solid says "this is the hour"; the
+   same shape dashed says "this is the hour you would get". */
+[data-pick] .tl-cell { cursor: pointer; }
+
+[data-pick] .tl-cell:hover {
+  outline: 1px dashed var(--surface);
+  outline-offset: -1px;
+  z-index: 2;
+}
+
+/* The control's readout on the left, the field's key on the right, on one
+   line. Indented to the band's left edge, so the footer and the field it
+   describes share an edge. */
+.tl-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 0.8rem;
+  margin: 0.55rem 0 0 calc(var(--tl-name) + 0.55rem);
+  font-size: 0.78rem;
+  color: var(--ink-2);
+}
+
+.tl-readout {
+  margin: 0;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The label sits on the ends' baseline, so the gap has to be wide enough
+   that "LMP ($/MWh)" and "$10.00" do not read as one run of text. */
+.tl-key {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.7rem;
+}
+
+.tl-key-name { white-space: nowrap; }
+
+.tl-ramp {
+  width: 7rem;
+  height: 0.5rem;
+}
+
+/* Under the ramp and as wide as it, so each number sits at the end it names.
+   Side by side they are two numbers next to a picture, and which one is the
+   cheap end is left to be guessed. */
+.tl-ends {
+  display: flex;
+  justify-content: space-between;
+  width: 7rem;
+  margin: 0.15rem 0 0;
+  font-variant-numeric: tabular-nums;
+}

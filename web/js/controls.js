@@ -255,87 +255,48 @@ function stopTransport() {
   transport = null;
 }
 
+/* The current mount's pause, as a function, so that something which is not a
+ * lever can stop playback without holding a reference to the levers. W3.10
+ * gave the heatmap a click that picks an hour, and a pick that left the timer
+ * running would move the cursor and then walk it straight off the hour the
+ * visitor asked for.
+ *
+ * Module state for the same reason `transport` is: a structural edit throws
+ * the old buttons away and mounts new ones, so a pause captured by a caller
+ * would close over a button that is no longer on the page. Reset on every
+ * mount, below.
+ *
+ * It clears the timer AND restores the button, which is why stopTransport is
+ * not enough on its own -- a cleared timer under a button still reading
+ * "Pause" is a control that lies about its own state.
+ */
+let pause = () => {};
+
+export function pausePlayback() {
+  pause();
+}
+
 const mw = (x) => `${x.toFixed(0)} MW`;
 const usdPerMwh = (x) => `$${x.toFixed(2)}`;
 const limitText = (pos) => (pos >= LIMIT_INF_POS ? "∞" : mw(pos));
 
 /* --------------------------------------------------------------- the mount
  *
- * mountLevers(el, state, {onEdit, onHour}) -> sync()
+ * mountLevers(el, state, {onEdit}) -> sync()
  *
  *   onEdit()   state has changed in a way the Engine must answer. Re-solve.
- *   onHour()   state has changed in a way the Response already answers.
- *              Re-read the arrays that are already here. No post.
+ *
+ * The hour is not here. It moved to mountHour at W3.11, because it stopped
+ * being a row in this panel and became the Timeline's own control -- the one
+ * lever whose track is a picture of what it indexes.
  *
  * sync() rewrites every readout from state, for the levers a lever moved --
  * nothing here reaches into another lever's value, so the sync exists for
  * undo (W2.7) and for the structural edits of W2.5, which rebuild instead.
  */
-export function mountLevers(root, state, { onEdit, onHour }) {
+export function mountLevers(root, state, { onEdit }) {
   root.replaceChildren();
-  stopTransport();
   const syncs = [];
-
-  /* ---- the hour. First, because it is the one that does not re-solve. */
-  const hours = group(
-    "Hour",
-    "Indexes the day already here. Playing posts nothing.",
-  );
-  const lastHour = Math.max(state.shape.length, 1);
-
-  /* Play, in the name column to the left of the rail. The name it displaces
-     is "Hour", which the legend directly above already says. */
-  const play = el("button", {
-    type: "button",
-    class: "transport",
-    "aria-pressed": "false",
-    "aria-label": "Play the day, one hour at a time",
-  }, "Play");
-  play.disabled = state.shape.length < 2;
-
-  const hour = slider({
-    name: "Hour",
-    min: 1,
-    max: lastHour,
-    step: 1,
-    value: state.hour + 1,
-    format: (h) => `${h} of ${state.shape.length}`,
-    /* W2.7. The lever that does not re-solve says so in its geometry: a hollow
-       thumb, and ticks every six hours. Both are in style.css. */
-    kind: "index",
-    ticks: Array.from(
-      { length: Math.floor(lastHour / 6) },
-      (_, i) => (i + 1) * 6,
-    ),
-    lead: play,
-    onInput: (h) => {
-      state.hour = h - 1;
-      onHour();
-    },
-  });
-  const showHour = () => {
-    hour.sync(state.hour + 1);
-    onHour();
-  };
-
-  const setPlaying = (on) => {
-    stopTransport();
-    play.setAttribute("aria-pressed", String(on));
-    play.textContent = on ? "Pause" : "Play";
-    if (!on) return;
-    transport = setInterval(() => {
-      state.hour = (state.hour + 1) % state.shape.length;
-      showHour();
-    }, HOUR_STEP_MS);
-  };
-
-  play.addEventListener("click", () => {
-    setPlaying(play.getAttribute("aria-pressed") !== "true");
-  });
-
-  hours.append(hour.row);
-  syncs.push(() => hour.sync(state.hour + 1));
-  root.append(hours);
 
   /* ---- the slack bus (W2.6).
    *
@@ -478,5 +439,104 @@ export function mountLevers(root, state, { onEdit, onHour }) {
 
   return function sync() {
     for (const f of syncs) f();
+  };
+}
+
+/* --------------------------------------------------------- the hour, W3.11
+ *
+ * mountHour(el, state, {onHour}) -> sync()
+ *
+ * The hour left the Levers panel and became the Timeline's own control. It
+ * was always the odd one in that stack: the other six declare something the
+ * engine must answer for, and this one walks an answer already in the
+ * browser. In the Timeline it sits above the field it indexes, and the track
+ * and the band are the same 24 hours at the same width, so the thumb is
+ * literally over the hour it names.
+ *
+ * The transport, the pause rule and the sync contract are unchanged --
+ * mountLevers returned a sync() and so does this. What changed is where the
+ * row is mounted and that it no longer carries a readout: "Hour 19 of 24"
+ * is printed in the Timeline's footer, once, beside the key.
+ */
+export function mountHour(root, state, { onHour }) {
+  root.replaceChildren();
+  stopTransport();
+  pause = () => {};
+
+  const lastHour = Math.max(state.shape.length, 1);
+
+  const play = el("button", {
+    type: "button",
+    class: "transport",
+    "aria-pressed": "false",
+    "aria-label": "Play the day, one hour at a time",
+  }, "Play");
+  play.disabled = state.shape.length < 2;
+
+  const hour = slider({
+    name: "Hour",
+    min: 1,
+    max: lastHour,
+    step: 1,
+    value: state.hour + 1,
+    /* No readout on this row. The Timeline prints the hour in its footer,
+       where it sits beside the key rather than at the end of the track --
+       and a number at the end of the track would shorten the track, which
+       has to be exactly as wide as the band under it. */
+    format: () => "",
+    kind: "index",
+    /* No ticks, and W2.7 gave this lever two encodings of "does not
+       re-solve" -- a hollow thumb and ticks every six hours. The hollow
+       thumb stays. The ticks are gone because the band directly beneath the
+       track now breaks at the same three places, and it is the stronger
+       mark of the two.
+
+       They also could not be made to line up. A tick sits at the thumb
+       CENTRE for that hour and a break sits at the BOUNDARY after it, and
+       the thumb's travel is inset by half a thumb:
+
+           tick, hour 6     (6-1)/23 of (W - 11.2px) + 5.6px  =  87.8px
+           break, 6 | 7     6/24 of W                         =  97.5px
+                                                  measured at W = 390px
+
+       Ten pixels apart, on two marks a reader would take for one. */
+    ticks: null,
+    lead: play,
+    onInput: (h) => {
+      /* Taking the hour by hand stops the transport. Without this the timer
+         overwrites the drag every 400 ms and the thumb fights the hand. The
+         same rule applies to a click on the field, which is why pause is
+         module state rather than a closure here. */
+      pause();
+      state.hour = h - 1;
+      onHour();
+    },
+  });
+
+  const showHour = () => {
+    hour.sync(state.hour + 1);
+    onHour();
+  };
+
+  const setPlaying = (on) => {
+    stopTransport();
+    play.setAttribute("aria-pressed", String(on));
+    play.textContent = on ? "Pause" : "Play";
+    if (!on) return;
+    transport = setInterval(() => {
+      state.hour = (state.hour + 1) % state.shape.length;
+      showHour();
+    }, HOUR_STEP_MS);
+  };
+
+  play.addEventListener("click", () => {
+    setPlaying(play.getAttribute("aria-pressed") !== "true");
+  });
+
+  pause = () => setPlaying(false);
+
+  root.append(hour.row);
+  return function sync() {
+    hour.sync(state.hour + 1);
   };
 }

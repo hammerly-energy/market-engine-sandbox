@@ -39,11 +39,12 @@
  */
 
 import { bodyFor, createSolver, getLimits } from "./api.js";
-import { mountLevers } from "./controls.js";
+import { mountHour, mountLevers, pausePlayback } from "./controls.js";
 import { createHistory } from "./edits.js";
 import { describe, summarize } from "./errors.js";
 import { renderFlows } from "./flows.js";
 import { mountGrammar } from "./grammar.js";
+import { mountTimelinePicker, renderTimeline } from "./timeline.js";
 import { renderMerit } from "./merit.js";
 import { checkBounds, fetchSeed, stateFromSeed } from "./state.js";
 import { renderUnits } from "./units.js";
@@ -131,6 +132,15 @@ function paint() {
   renderFlows(document.querySelector("#flows"), cleared, hour, editor.branches);
   renderUnits(document.querySelector("#units"), cleared, hour);
   renderIslands(document.querySelector("#islands"), cleared, hour);
+  /* The Timeline's field, which is the hour slider's scale as well as a view.
+     The hour is passed so the field can mark the column the thumb is on and
+     every other view is showing. */
+  renderTimeline(
+    document.querySelector("#timeline"),
+    cleared,
+    hour,
+    editor.buses.map((bus) => bus.name),
+  );
 
   document.querySelector("#hour-note").textContent =
     `Hour ${hour + 1} of ${cleared.hours.length}. The whole day came back ` +
@@ -241,6 +251,28 @@ function onHour() {
   paint();
 }
 
+/* W3.11. The Timeline's click, which is its own slider reached through the
+ * field instead of through the thumb.
+ *
+ * It is one hour, held in one place. The pick writes state.hour and then
+ * syncs the slider, so the thumb moves to the column that was clicked --
+ * backwards, the two halves of one panel would disagree about which hour
+ * this is. There is no solve: the hour indexes a day the browser already
+ * has, which is the whole reason the slider does not post either.
+ *
+ * Playback stops, for the same reason dragging the slider stops it. A pick
+ * that left the timer running would move the cursor to the clicked hour and
+ * then walk it off within 400 ms, so the click would read as not having
+ * worked.
+ */
+function pickHour(h) {
+  if (!cleared) return;
+  pausePlayback();
+  editor.hour = Math.min(Math.max(h, 0), cleared.hours.length - 1);
+  syncHour();
+  paint();
+}
+
 /* ------------------------------------------------------- the three changes
  *
  * A structural edit rebuilds the levers; a lever move does not. Backwards,
@@ -250,9 +282,20 @@ function onHour() {
 
 const history = createHistory(editor);
 
+/* The hour slider's sync, held because the field's pick moves the hour
+   without touching the thumb, and a thumb left where it was would be one
+   half of the Timeline disagreeing with the other. Replaced on every
+   rebuild; a structural edit throws the old control away. */
+let syncHour = () => {};
+
 function rebuild() {
   draw();
-  mountLevers(document.querySelector("#levers"), editor, { onEdit, onHour });
+  /* Two mounts, because the hour is in the Timeline panel and the other six
+     levers are in the rail below it. Both are rebuilt together: a shorter
+     shape moves the slider's own maximum, and a removed generator leaves a
+     lever writing into an object nothing renders. */
+  syncHour = mountHour(document.querySelector("#hour"), editor, { onHour });
+  mountLevers(document.querySelector("#levers"), editor, { onEdit });
   refreshReadouts();
 }
 
@@ -301,6 +344,10 @@ mountGrammar({
   drop: () => history.drop(),
   undo,
 });
+
+/* Mounted once, outside rebuild(): the panel survives every repaint, and a
+   listener added per paint would stack one pick per paint. */
+mountTimelinePicker(document.querySelector("#timeline"), pickHour);
 
 document.querySelector("#solve").addEventListener("click", () => submit());
 

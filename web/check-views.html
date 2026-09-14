@@ -40,6 +40,7 @@ import { fetchSeed, stateFromSeed } from "./js/state.js";
 import { postClear } from "./js/api.js";
 import { verdictNote, verdictLabel, verdictFor } from "./js/render.js";
 import { priceDomain } from "./js/scales.js";
+import { mountTimelinePicker, renderTimeline } from "./js/timeline.js";
 
 const out = document.querySelector("#out");
 const results = [];
@@ -143,6 +144,95 @@ try {
         `got $${after.lo.toFixed(4)} to $${after.hi.toFixed(4)}`);
   check("though its own price is on the wire, unhidden",
         near(withZ.lmp.Z[18], 0));
+
+  /* ------------------------------------------------ W3.11, the Timeline
+
+     The Timeline is the fourth view to print a price, so it is the fourth
+     that has to qualify one. Asserted on the DOM it builds rather than on
+     the numbers it read, because the numbers are the engine's and are
+     already asserted above -- what is new here is whether a cell the engine
+     flagged is drawn as a cell the reader is told not to read off the ramp.
+
+     Rendered into a detached node: the check page has no panel, and a view
+     that needed one would be a view coupled to the page that hosts it. */
+  const host = document.createElement("div");
+  const order = state.buses.map((b) => b.name);
+  renderTimeline(host, withZ, 18, order);
+
+  const cells = host.querySelectorAll(".tl-cell");
+  check("one cell per bus per hour",
+        cells.length === order.length * withZ.hours.length,
+        `${cells.length} for ${order.length} buses x ${withZ.hours.length} hours`);
+
+  const dotted = host.querySelectorAll(".tl-cell.tl-interval");
+  check("the empty island is dotted in every hour",
+        dotted.length === withZ.hours.length,
+        `${dotted.length} dotted`);
+
+  /* The dot is per hour, unlike the domain test above, which asks whether a
+     bus is an interval in ALL of them. A and D are unique all day here, so
+     nothing of theirs is dotted. */
+  const rows = host.querySelectorAll(".tl-row");
+  const last = rows[rows.length - 1];
+  check("and it is Z's row that carries them",
+        last.querySelector(".tl-name").textContent.startsWith("Z") &&
+        last.querySelectorAll(".tl-interval").length === withZ.hours.length);
+
+  check("the hour every other view shows is marked, once per bus",
+        host.querySelectorAll(".tl-cell.tl-now").length === order.length);
+
+  check("the slack row is marked as the slack",
+        host.querySelectorAll(".tl-slack").length === 1 &&
+        [...rows].find((r) => r.querySelector(".tl-slack"))
+          .querySelector(".tl-name").textContent.startsWith(withZ.slack));
+
+  /* Two islands, so both are named. A connected network is one island and
+     naming it would be noise. */
+  check("a cut network names its islands",
+        host.querySelectorAll(".tl-island").length ===
+          Object.keys(withZ.islands).length);
+
+  /* ---- the pick, W3.10.
+
+     The field acts as the hour lever, so what is asserted is that a click
+     reports the hour the mark carries -- not that the page moved, which is
+     main.js's wiring and not this view's. */
+  const picked = [];
+  mountTimelinePicker(host, (h) => picked.push(h));
+
+  const at = (h) => host.querySelector(`.tl-cell[data-hour="${h}"]`);
+  at(0).click();
+  at(23).click();
+  check("a cell reports its own hour, zero-based as the arrays are",
+        picked.join() === "0,23", picked.join());
+
+  /* No axis row to pick from any more: the slider above the field is the
+     time axis, so the field's only marks are cells. */
+  check("the field carries no axis of its own",
+        host.querySelectorAll(".tl-tick").length === 0);
+
+  /* Mounted once and rendering many times is the normal case -- every lever,
+     every hour, every solve repaints the field. A listener added inside the
+     render would stack one pick per paint. */
+  renderTimeline(host, withZ, 3, order);
+  renderTimeline(host, withZ, 4, order);
+  picked.length = 0;
+  at(7).click();
+  check("a repaint does not stack a second listener",
+        picked.length === 1, `${picked.length} picks from one click`);
+
+  /* The footer prints the hour once, for the control and the field at the
+     same time. Rendered at hour 4 by the repaint above. */
+  check("the footer prints the hour the field is marking",
+        host.querySelector(".tl-readout").textContent === "Hour 5 of 24",
+        host.querySelector(".tl-readout").textContent);
+
+  /* The key is built from the same domain the map's legend prints, so the
+     two cannot disagree about what a grey is worth. */
+  check("the key prints the domain the map prints",
+        host.querySelector(".tl-ends").textContent ===
+          `$${after.lo.toFixed(2)}$${after.hi.toFixed(2)}`,
+        host.querySelector(".tl-ends").textContent);
 
   document.querySelector("#diff").textContent =
     `domain without Z   $${before.lo.toFixed(4)} to $${before.hi.toFixed(4)}\n` +
