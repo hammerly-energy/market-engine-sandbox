@@ -69,11 +69,11 @@ check("idle on load", armed().startsWith("Move mode."));
 press("+ Generator");
 check("arming shows the mode", armed().startsWith("Add generator armed."), armed());
 clickMark(bus("B")); await wait();
-check("a generator landed at B", cfg().fleet.g1?.bus === "B", JSON.stringify(cfg().fleet.g1));
+check("a generator landed at B", cfg().fleet.B1?.bus === "B", JSON.stringify(cfg().fleet.B1));
 check("defaults are the written ones",
-  cfg().fleet.g1?.pmax_mw === 100 && cfg().fleet.g1?.cost_usd_per_mwh === 25);
+  cfg().fleet.B1?.pmax_mw === 100 && cfg().fleet.B1?.cost_usd_per_mwh === 25);
 check("an applied edit returns to idle", armed().startsWith("Move mode."), armed());
-check("and says what it did", armed().includes("Added g1 at B"), armed());
+check("and says what it did", armed().includes("Added B1 at B"), armed());
 check("the map drew the new unit", svg.querySelectorAll("[data-gen]").length === 6);
 
 // --- connect
