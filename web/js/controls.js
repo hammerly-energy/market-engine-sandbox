@@ -207,10 +207,25 @@ function chooser({ name, options, value, onChange }) {
   };
 }
 
-function group(title, note = null) {
+/* A group heading and, under it, a key rather than a paragraph.
+ *
+ * Each group used to carry two or three sentences explaining what its levers
+ * declare. The same facts as term-and-gloss rows are scanned instead of read,
+ * and the terms line up into one edge down the panel -- the register the
+ * views use for their symbol keys, applied to the rail.
+ *
+ * `rows` is [[term, gloss], ...]. A gloss is a noun phrase and stops where
+ * the fact stops. */
+function group(title, rows = null) {
   const box = el("fieldset", { class: "lever-group" });
   box.append(el("legend", {}, title));
-  if (note) box.append(el("p", { class: "note" }, note));
+  if (rows && rows.length) {
+    const key = el("dl", { class: "key" });
+    for (const [term, gloss] of rows) {
+      key.append(el("dt", {}, term), el("dd", {}, gloss));
+    }
+    box.append(key);
+  }
   return box;
 }
 
@@ -322,11 +337,10 @@ export function mountLevers(root, state, { onEdit }) {
    * fallback follows. The engine's refusal of a slack that is not a bus is
    * kept, and it is the check that catches this failing (CLAUDE.md, W2.6).
    */
-  const origin = group(
-    "Slack Bus",
-    "An accounting origin. Moving it moves λ and the energy/congestion " +
-      "split, and no LMP, payment or settlement figure.",
-  );
+  const origin = group("Slack Bus", [
+    ["moves", "λ, and the energy/congestion split"],
+    ["does not move", "any LMP, payment or settlement figure"],
+  ]);
   const slack = chooser({
     name: "Slack",
     options: state.buses.map((bus) => bus.name),
@@ -343,11 +357,10 @@ export function mountLevers(root, state, { onEdit }) {
   /* ---- line ratings. An Override, not a config edit: clear() takes limits
      as its own argument, so moving a rating does not rewrite the scenario the
      rating belongs to, and dropping the override restores it exactly. */
-  const lines = group(
-    "Line Ratings",
-    "An override passed alongside the scenario, not an edit to it. ∞ is an " +
-      "unrated line, not a very large rating.",
-  );
+  const lines = group("Line Ratings", [
+    ["an override", "passed alongside the scenario, not an edit to it"],
+    ["∞", "unrated, not a very large rating"],
+  ]);
   for (const [line, branch] of Object.entries(state.branches)) {
     const s = slider({
       name: line,
@@ -371,11 +384,10 @@ export function mountLevers(root, state, { onEdit }) {
    * The label is the name alone. It used to carry the bus after it, because
    * the place names the fleet had before W3.7 said nothing about where a
    * unit was. A1 does, so the suffix became the same letter twice. */
-  const fleet = group(
-    "Generators",
-    "Capacity and offer per unit. No unit commitment, so a unit may run at " +
-      "any level up to its capacity.",
-  );
+  const fleet = group("Generators", [
+    ["per unit", "capacity and offer"],
+    ["no unit commitment", "a unit may run at any level up to its capacity"],
+  ]);
   for (const [name, gen] of Object.entries(state.fleet)) {
     const cap = slider({
       name: `${name} capacity`,
@@ -426,11 +438,11 @@ export function mountLevers(root, state, { onEdit }) {
      is firm, at the offer cap; dropping one below an LMP turns it into demand
      response, which is M9(a)'s figure and a config line, not a slider on this
      page. */
-  const demand = group(
-    "Demand Bids",
-    "Peak MW per bid, scaled by the 24-hour shape. Zero is a bus with no " +
-      "bid. Every bid is firm, at the offer cap.",
-  );
+  const demand = group("Demand Bids", [
+    ["peak MW", "scaled by the 24-hour shape"],
+    ["zero", "a bus with no bid"],
+    ["every bid", "firm, at the offer cap"],
+  ]);
   for (const bus of state.buses) {
     const here = bidsAt(state.bids, bus.name);
 

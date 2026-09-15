@@ -16,6 +16,94 @@
     </p>
   </header>
 
+  <!-- W3.14. The formulation, set as a document rather than as a legend, and
+       standing above the frame as the page's header.
+
+       One column per term of the identity, in the order the identity reads
+       them, and each column carries its equation together with the symbols
+       that appear in it. A single glossary at the foot was tried and dropped:
+       it put PTDF a long way from the sum it indexes, so a reader meeting a
+       symbol had to leave the equation to look it up.
+
+       Above the frame rather than inside the views because it is what the
+       rest of the page is evidence for -- the identity is read once, and
+       every panel underneath is one term of it measured.
+
+       Lambda's column has no equation because it has none: it is the dual on
+       the balance constraint, not a sum over anything, and the shorter column
+       is that fact rather than an unfinished one. -->
+  <section class="formulation">
+    <h2>Price Formation Overview</h2>
+
+    <div class="formulation-lead">
+      <math display="block" class="display">
+        <mrow>
+          <msub><mi mathvariant="italic">LMP</mi><mi>i</mi></msub><mo>=</mo><mi>&#955;</mi><mo>+</mo><msub><mi mathvariant="italic">CC</mi><mi>i</mi></msub><mo>+</mo><msub><mi mathvariant="italic">MLC</mi><mi>i</mi></msub>
+        </mrow>
+      </math>
+        <dl class="defs">
+          <dt><math><msub><mi mathvariant="italic">LMP</mi><mi>i</mi></msub></math></dt><dd>Price to serve one additional MWh of load at node <i>i</i>.</dd>
+          <dt><math><mi>i</mi></math></dt><dd>Index representing a specific node or bus on the grid.</dd>
+          <dt><math><mi>k</mi></math></dt><dd>Index representing an individual transmission line in the system.</dd>
+        </dl>
+    </div>
+
+    <div class="formulation-parts">
+      <div>
+        <h3>System Energy Price (<math><mi>&#955;</mi></math>)</h3>
+        <p>The marginal cost of energy at the slack bus, ignoring grid limits.
+          This is the same at each bus.</p>
+      </div>
+
+      <div>
+        <h3>Congestion Component (<math><msub><mi mathvariant="italic">CC</mi><mi>i</mi></msub></math>)</h3>
+        <p>The marginal cost of congestion at bus <i>i</i>, summed over every
+          line the network has:</p>
+
+        <math display="block" class="display">
+          <mrow>
+            <msub><mi mathvariant="italic">CC</mi><mi>i</mi></msub><mo>=</mo>
+            <munderover><mo movablelimits="false">&#8721;</mo>
+              <mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>K</mi></munderover>
+            <mrow><mo stretchy="false">(</mo><msub><mi mathvariant="italic">PTDF</mi><mrow><mi>i</mi><mo>,</mo><mi>k</mi></mrow></msub><mo>&#215;</mo><msub><mi>&#956;</mi><mi>k</mi></msub>
+              <mspace width="0.12em"></mspace><mo stretchy="false">)</mo></mrow>
+          </mrow>
+        </math>
+
+        <!-- The field this row names is signed: mu = mu_up - mu_dn, positive
+             at a line's lower limit and negative at its upper, so it is |mu|
+             that is the saving stated here (src/model/pricing.py:16-25,
+             measured there as DE rated 240 carrying sum mu = +979.4908). The
+             sign is carried in the Line Flows panel, which is where a reader
+             meets a negative mu against a number on screen. -->
+        <dl class="defs">
+          <dt><math><msub><mi mathvariant="italic">PTDF</mi><mrow><mi>i</mi><mo>,</mo><mi>k</mi></mrow></msub></math></dt><dd>Fraction of node <i>i</i>'s power physically flowing over line <i>k</i>.</dd>
+          <dt><math><msub><mi>&#956;</mi><mi>k</mi></msub></math></dt><dd>System cost savings if line <i>k</i>'s capacity increases by 1 MW.</dd>
+        </dl>
+      </div>
+
+      <div>
+        <h3>Marginal Loss Component (<math><msub><mi mathvariant="italic">MLC</mi><mi>i</mi></msub></math>)</h3>
+        <p>The cost of energy lost as heat in delivering power to bus <i>i</i>.
+          This engine assumes negligible losses, so this term equals zero at
+          each bus:</p>
+
+        <math display="block" class="display">
+          <mrow>
+            <msub><mi mathvariant="italic">MLC</mi><mi>i</mi></msub><mo>=</mo><mi>&#955;</mi><mo>&#215;</mo><mfrac><mrow><mo>&#8706;</mo><msub><mi>P</mi><mi mathvariant="italic">loss</mi></msub></mrow><mrow><mo>&#8706;</mo><msub><mi>P</mi><mi>i</mi></msub></mrow></mfrac><mo>=</mo><mn>0</mn>
+          </mrow>
+        </math>
+
+        <dl class="defs">
+          <dt><math><msub><mi>P</mi><mi mathvariant="italic">loss</mi></msub></math></dt><dd>Total physical power losses across the entire modeled grid.</dd>
+          <dt><math><msub><mi>P</mi><mi>i</mi></msub></math></dt><dd>Amount of real power injected directly at node <i>i</i>.</dd>
+          <dt><math><mfrac><mrow><mo>&#8706;</mo><msub><mi>P</mi><mi mathvariant="italic">loss</mi></msub></mrow><mrow><mo>&#8706;</mo><msub><mi>P</mi><mi>i</mi></msub></mrow></mfrac></math></dt><dd>Change in total system losses per 1 MW injection at node <i>i</i>.</dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+
   <!-- W3.0, the frame. The rail holds what the visitor manipulates and the
        views hold what the engine answered, so a lever and the figure it moves
        are on screen together and a view can be read against the map without
@@ -52,10 +140,11 @@
 
       <section class="panel">
         <h2>Levers</h2>
-        <p class="note">
-          A filled thumb re-solves; the hollow one indexes the day already here.
-          Nothing is debounced, so a degenerate price flickers.
-        </p>
+        <dl class="key">
+          <dt>filled thumb</dt><dd>re-solves</dd>
+          <dt>hollow thumb</dt><dd>indexes the day already here</dd>
+          <dt>not debounced</dt><dd>a degenerate price flickers</dd>
+        </dl>
         <div id="levers"></div>
       </section>
     </div>
@@ -68,64 +157,91 @@
       <section class="panel" data-results>
         <h2>Locational Marginal Price (LMP)</h2>
         <p class="note" id="hour-note">Waiting for the first solve…</p>
-        <p class="note">
-          The dashed line is λ, the same at every bus. The bar is congestion.
-          The DC approximation is lossless, so there is no third term.
-        </p>
         <div id="split"></div>
-        <p class="caption">
-          Congestion is zero at the slack, so its price is λ. Move the slack: the
-          bars change, the prices do not. A hollow end cap and “one of several”
-          mean the optimum pins no single price, so the number is one end of an
-          interval.
-        </p>
+        <dl class="key">
+          <dt>at the slack</dt><dd>CC = 0, so its price is λ</dd>
+          <dt>hollow end cap</dt><dd>one end of an interval, not a point</dd>
+        </dl>
       </section>
 
       <section class="panel" data-results>
         <h2>Merit Order</h2>
-        <p class="note">
-          Offers cheapest first, each block as wide as its capacity and as tall as
-          its cost. Solid ran. Dashed is demand; λ is the rule across it.
-        </p>
         <div id="merit"></div>
-        <p class="caption">
-          A cheap block left empty beside a full dearer one is congestion. Bids sit
-          at the ceiling, not to scale: the offer cap is far above every offer.
-          The cap bounds an offer. With a line binding, a bus clears wherever
-          λ plus its congestion lands — above the cap, or below zero.
-        </p>
+        <dl class="key">
+          <dt>block</dt><dd>width is capacity, height is offer</dd>
+          <dt>solid</dt><dd>ran; dashed is demand</dd>
+          <dt>cheap block left empty</dt><dd>congestion</dd>
+          <dt>the cap</dt><dd>bounds an offer, not an LMP</dd>
+        </dl>
       </section>
 
       <section class="panel" data-results>
         <h2>Line Flows Against Limits</h2>
-        <p class="note">
-          Bars are the flow, on one MW scale shared by every line. Ticks are that
-          line's rating each way. Positive runs from the branch's first bus to its
-          second.
-        </p>
+        <dl class="key">
+          <dt>bar</dt><dd>flow, on one MW scale shared by every line</dd>
+          <dt>positive</dt><dd>from the branch's first bus to its second</dd>
+        </dl>
         <div id="flows"></div>
-        <p class="caption">
-          μ is the dual on the limit, and it is signed. |μ| is what one more MW
-          of rating is worth; the sign says which limit is holding. No ticks
-          means no rating, so it can never bind.
-        </p>
+        <div class="eq">
+          <math display="block">
+            <mrow>
+              <msub><mi>f</mi><mi>k</mi></msub>
+              <mo>=</mo>
+              <munder><mo movablelimits="false">&#8721;</mo><mi>i</mi></munder>
+              <msub><mi mathvariant="italic">PTDF</mi>
+                <mrow><mi>k</mi><mo>,</mo><mi>i</mi></mrow></msub>
+              <mo>&#215;</mo>
+              <msub><mi mathvariant="italic">inj</mi><mi>i</mi></msub>
+            </mrow>
+          </math>
+          <math display="block">
+            <mrow>
+              <mo>&#8722;</mo><msub><mi>F</mi><mi>k</mi></msub>
+              <mo>&#8804;</mo><msub><mi>f</mi><mi>k</mi></msub>
+              <mo>&#8804;</mo><msub><mi>F</mi><mi>k</mi></msub>
+              <mo>,</mo>
+              <mspace width="1.2em"></mspace>
+              <msub><mi>&#956;</mi><mi>k</mi></msub>
+              <mo>=</mo>
+              <msubsup><mi>&#956;</mi><mi>k</mi><mrow><mi mathvariant="normal">up</mi></mrow></msubsup>
+              <mo>&#8722;</mo>
+              <msubsup><mi>&#956;</mi><mi>k</mi><mrow><mi mathvariant="normal">dn</mi></mrow></msubsup>
+            </mrow>
+          </math>
+          <dl class="key">
+            <dt>F<sub><i>k</i></sub></dt><dd>the rating, each way</dd>
+            <dt>|&#956;<sub>k</sub>|</dt><dd>value of one more MW of rating</dd>
+            <dt>sign</dt><dd>positive at the lower limit, negative at the upper</dd>
+            <dt>no rating</dt><dd>no ticks, so the line can never bind</dd>
+          </dl>
+        </div>
       </section>
 
       <!-- Spans the row: the fleet runs 40 MW to 600 MW, and in a half-width
            column the smallest unit's bar is four pixels and reads as zero. -->
       <section class="panel span-all" data-results>
         <h2>Generation by Unit</h2>
-        <p class="note">
-          Bars are dispatch, on one MW scale shared by every unit. Ticks are
-          capacity, so the gap is headroom. Colour is the unit's identity, as in the
-          merit order.
-        </p>
+        <dl class="key">
+          <dt>bar</dt><dd>dispatch; the tick is capacity, the gap headroom</dd>
+          <dt>colour</dt><dd>the unit's identity, as in the merit order</dd>
+        </dl>
         <div id="units"></div>
-        <p class="caption">
-          Status is where a unit sits, not what sets the price:
-          <code>off</code>, <code>interior</code> part-loaded,
-          <code>at_max</code> full. rc is the LMP at its bus minus its offer.
-        </p>
+        <div class="eq">
+          <math display="block">
+            <mrow>
+              <msub><mi mathvariant="italic">rc</mi><mi>g</mi></msub>
+              <mo>=</mo>
+              <msub><mi mathvariant="italic">LMP</mi><mrow><mi>i</mi><mo stretchy="false">(</mo><mi>g</mi><mo stretchy="false">)</mo></mrow></msub>
+              <mo>&#8722;</mo>
+              <msub><mi>c</mi><mi>g</mi></msub>
+            </mrow>
+          </math>
+          <dl class="key">
+            <dt><code>off</code></dt><dd>not running</dd>
+            <dt><code>interior</code></dt><dd>part-loaded</dd>
+            <dt><code>at_max</code></dt><dd>full</dd>
+          </dl>
+        </div>
       </section>
 
       <!-- Spans the row: the residual is the last column, and a ledger whose
@@ -133,12 +249,41 @@
       <section class="panel span-all" data-results>
         <h2>Islands and the Settlement Residual</h2>
         <div id="islands"></div>
-        <p class="caption">
-          One λ and one settlement identity per island, per hour. The residual
-          is rent from the money minus rent from the duals — shown, not
-          hidden. The last column says whether the optimum pins one price and
-          one dispatch; an island with nothing in it pins neither.
-        </p>
+        <div class="eq">
+          <math display="block">
+            <mrow>
+              <mtext>congestion rent</mtext>
+              <mo>=</mo>
+              <mtext>payments</mtext><mo>&#8722;</mo><mtext>revenue</mtext>
+            </mrow>
+          </math>
+          <math display="block">
+            <mrow>
+              <mtext>rent</mtext>
+              <mo>=</mo>
+              <mo>&#8722;</mo>
+              <munder><mo movablelimits="false">&#8721;</mo><mi>k</mi></munder>
+              <msub><mi>&#956;</mi><mi>k</mi></msub>
+              <mo>&#215;</mo>
+              <msub><mi>f</mi><mi>k</mi></msub>
+            </mrow>
+          </math>
+          <math display="block">
+            <mrow>
+              <mtext>residual</mtext>
+              <mo>=</mo>
+              <mo stretchy="false">(</mo><mtext>payments</mtext>
+              <mo>&#8722;</mo><mtext>revenue</mtext><mo stretchy="false">)</mo>
+              <mo>&#8722;</mo><mtext>rent</mtext>
+              <mo>=</mo><mn>0</mn>
+            </mrow>
+          </math>
+          <dl class="key">
+            <dt>two routes</dt><dd>once from the money, once from the duals</dd>
+            <dt>residual</dt><dd>the claim that they agree</dd>
+            <dt>per island, per hour</dt><dd>never summed</dd>
+          </dl>
+        </div>
       </section>
 
     </main>
@@ -161,10 +306,10 @@
 
     <section class="panel">
       <h2>Traffic</h2>
-      <p class="note">
-        Only the freshest response is applied — a drag fires many solves and they
-          return out of order.
-        </p>
+      <dl class="key">
+        <dt>applied</dt><dd>the freshest response only</dd>
+        <dt>dropped</dt><dd>a drag fires many solves; they return out of order</dd>
+      </dl>
       <p class="controls">
         <button type="button" id="solve">Solve once</button>
         <button type="button" id="burst">Burst of five</button>

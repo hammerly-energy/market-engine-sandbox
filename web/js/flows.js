@@ -226,9 +226,9 @@ function legend() {
 
   const says = document.createElement("p");
   says.className = "flow-ramp-note";
-  says.textContent =
-    "Ticks are the rating. A bar reaching its tick is a line at its limit. " +
-    "The same colours ink the map.";
+  /* A legend entry, not a sentence: the panel's key already names the bar and
+     the sign, and this row names the tick. */
+  says.textContent = "tick: the rating — a bar reaching it is a line at its limit";
   wrap.append(says);
   return wrap;
 }

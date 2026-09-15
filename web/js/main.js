@@ -145,9 +145,11 @@ function paint() {
     editor.buses.map((bus) => bus.name),
   );
 
+  /* The hour and nothing else. "The whole day came back with the last solve"
+     was a sentence explaining a mechanism the reader cannot act on, and the
+     hollow thumb in the Levers key already says the hour does not re-solve. */
   document.querySelector("#hour-note").textContent =
-    `Hour ${hour + 1} of ${cleared.hours.length}. The whole day came back ` +
-    `with the last solve.`;
+    `Hour ${hour + 1} of ${cleared.hours.length}`;
 }
 
 /* The three panels that describe the editor rather than the market: what it

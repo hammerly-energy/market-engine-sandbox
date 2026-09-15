@@ -65,7 +65,9 @@ export const MODES = [
     label: "Move Bus",
     verb: "Move",
     takes: [],
-    hint: "Drag a bus to move it. Coordinates never cross the wire.",
+    /* The instruction alone. "Coordinates never cross the wire" is a fact
+       about the wire format and there is nothing a visitor does with it. */
+    hint: "Drag a bus to move it.",
   },
   {
     id: "add-bus",

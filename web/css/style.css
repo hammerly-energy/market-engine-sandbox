@@ -1524,3 +1524,228 @@ button[aria-pressed="true"]:focus-visible {
   margin: 0.15rem 0 0;
   font-variant-numeric: tabular-nums;
 }
+
+/* ------------------------------------------------- W3.13, equations on screen
+   Four panels described an identity in a sentence and now state it. The
+   project is about where prices come from, and a paragraph saying "the bar is
+   congestion" is a worse account of
+
+       LMP_i = lambda + CC_i + MLC_i
+
+   than the line itself is.
+
+   Native MathML, no library. The repo's reason for no toolchain is lifespan
+   (CLAUDE.md, Frontend stack), and a CDN script pinned to a version is the
+   same bet one layer down; MathML is in Chrome, Safari and Firefox and needs
+   no build step, no script and no stylesheet from anywhere else.
+
+   Indented on its own line rather than centred: centring an equation in a
+   panel this narrow puts it in a different place on every row, and the
+   register's rule is that a formula gets its own line with the symbols
+   defined around it. */
+
+.eq {
+  margin: 0 0 0.75rem;
+}
+
+.eq math {
+  display: block;
+  margin: 0.55rem 0 0.55rem 1.2rem;
+  font-size: 1.05em;
+  /* An equation is the one thing on this page allowed to be wider than its
+     column -- a subscripted sum does not wrap. It scrolls in its own box, so
+     the page itself never scrolls sideways. */
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* The symbols, defined around the formula. Same size and colour as the .note
+   it replaced, so the hierarchy is unchanged: the equation is the mark and
+   this is its caption. */
+.eq-note {
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+  margin: 0.35rem 0 0;
+}
+
+.eq-note code {
+  font-size: 0.95em;
+}
+
+/* ------------------------------------------------------- W3.13, the symbol key
+   What replaced the panel paragraphs. Every view used to carry a note above
+   the figure and a caption below it, four to five lines each; the equation
+   now states the mechanism and this names the symbols in it.
+
+   A term and a gloss, not a sentence. The gloss is a noun phrase and stops
+   where the fact stops, so the column is scanned rather than read -- which is
+   the difference between a legend and an argument, and the argument belongs
+   in the prose around the figure, not on it.
+
+   Two columns, the term right-aligned against its gloss, so the terms form a
+   single edge the eye can run down. */
+
+.key {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.15rem 0.8rem;
+  margin: 0.5rem 0 0;
+  font-size: var(--type-annot);
+}
+
+.key dt {
+  text-align: right;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.key dd {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.key code { font-size: 0.95em; }
+
+/* A key sitting under an equation belongs to it: tightened up, and indented
+   to the equation's own margin so the two read as one block. */
+.eq .key {
+  margin-left: 1.2rem;
+  margin-top: 0.4rem;
+}
+
+@media (max-width: 30rem) {
+  /* The terms stack over their glosses rather than squeezing the gloss into
+     a four-character column. */
+  .key { grid-template-columns: 1fr; gap: 0 }
+  .key dt { text-align: left; margin-top: 0.3rem }
+}
+
+/* ------------------------------------------ W3.14, the price formation header
+   Restyled at W3.15 -- see below for what moved and why.
+
+   The math set as a document and standing above the frame: a lead identity,
+   then a heading per term, an equation where the term has one, and a
+   definition list under it.
+
+   It is the page's header rather than a panel because it is read once and
+   every view below is one of its terms measured. It carries no panel border
+   for the same reason -- a border would make it the first of eight boxes
+   instead of the statement the eight are evidence for.
+
+   h2 is set at --type-label, not --type-title: it sits under the masthead's
+   h1 and had been the same size, so the page read as two competing titles
+   before any figure. Sized to match every panel h2 below it in the frame,
+   it now reads as a section heading rather than a second name for the page. */
+
+.formulation {
+  margin: 0 0 1.5rem;
+  padding: 0 0 1.25rem;
+  border-bottom: 1px solid var(--grid);
+}
+
+.formulation h2 {
+  font-size: var(--type-label);
+  font-weight: 500;
+  margin: 0 0 0.7rem;
+}
+
+.formulation h3 {
+  font-size: var(--type-label);
+  font-weight: 500;
+  margin: 0 0 0.3rem;
+}
+
+.formulation p {
+  font-size: var(--type-annot);
+  color: var(--ink-2);
+  margin: 0 0 0.4rem;
+  max-width: 68ch;
+}
+
+/* The lead is capped at the same measure as its own paragraph, so the
+   equation centres over the text it introduces instead of over the full
+   width of the page -- it was doing the latter while the three-term band
+   below it kept to a text measure, and the two did not read as one block. */
+.formulation-lead {
+  max-width: 40rem;
+  margin: 0 0 1.25rem;
+}
+
+/* Three terms, one column each -- lambda, the congestion component, the
+   loss component -- so the identity's three-term sum and the header's
+   three-column shape are the same shape. auto-fit rather than a fixed count:
+   the same rule the views grid below uses, so the band degrades the same way
+   the page already does when the window narrows. */
+.formulation-parts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1.25rem 2rem;
+  align-items: start;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--grid);
+}
+
+/* The equation is the focal point of its block, so it is the one thing on the
+   page set larger than a heading.
+
+   Left edge, not centred: a centred equation over a left-aligned paragraph
+   reads as two blocks rather than one, which was the header's first problem.
+   fit-content keeps the box no wider than the formula itself, so overflow-x
+   on a long line does not open a scrollbar the width of the column. */
+.formulation math.display {
+  display: block;
+  font-size: 1.45em;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0.9rem 0 1rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* The lead identity is the page's one statement, so it gets the most room and
+   the largest setting of the three. */
+.formulation-lead math.display {
+  font-size: 1.7em;
+  margin: 1rem 0 0.6rem;
+}
+
+/* Inline math inside a heading or a list item sits on the text baseline and
+   takes the surrounding size, so a symbol in prose is the same symbol as in
+   the equation above it rather than a second notation for it. */
+.formulation h3 math,
+.defs math {
+  font-size: 1.05em;
+}
+
+
+
+
+/* ------------------------------- W3.14, the symbols beside their equations
+   A definition list per column, holding the symbols that appear in that
+   column's equation. The symbol is right-aligned so the symbols form one edge
+   to scan down, and the gloss sits beside it rather than under it.
+
+   A single glossary at the foot of the header was tried first and dropped: it
+   put PTDF a long way from the sum it indexes, and a reader meeting a symbol
+   had to leave the equation to look it up. */
+
+.defs {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.3rem 0.7rem;
+  align-items: baseline;
+  margin: 0.7rem 0 0;
+  font-size: var(--type-annot);
+}
+
+.defs dt {
+  text-align: right;
+  color: var(--ink);
+}
+
+.defs dd {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.defs math { font-size: 1.05em; }
