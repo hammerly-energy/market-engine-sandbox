@@ -158,29 +158,20 @@
         <h2>Locational Marginal Price (LMP)</h2>
         <p class="note" id="hour-note">Waiting for the first solve…</p>
         <div id="split"></div>
-        <dl class="key">
-          <dt>at the slack</dt><dd>CC = 0, so its price is λ</dd>
-          <dt>hollow end cap</dt><dd>one end of an interval, not a point</dd>
-        </dl>
       </section>
 
       <section class="panel" data-results>
         <h2>Merit Order</h2>
         <div id="merit"></div>
-        <dl class="key">
-          <dt>block</dt><dd>width is capacity, height is offer</dd>
-          <dt>solid</dt><dd>ran; dashed is demand</dd>
-          <dt>cheap block left empty</dt><dd>congestion</dd>
-          <dt>the cap</dt><dd>bounds an offer, not an LMP</dd>
-        </dl>
+        <p class="note">
+          Ranking of generators&#8217; offers from cheapest
+          to most expensive. Cheaper generators are frequently skipped due to
+          congestion or operational limitations.
+        </p>
       </section>
 
       <section class="panel" data-results>
         <h2>Line Flows Against Limits</h2>
-        <dl class="key">
-          <dt>bar</dt><dd>flow, on one MW scale shared by every line</dd>
-          <dt>positive</dt><dd>from the branch's first bus to its second</dd>
-        </dl>
         <div id="flows"></div>
         <div class="eq">
           <math display="block">
