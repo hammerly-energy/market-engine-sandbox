@@ -85,6 +85,26 @@ h1 {
   margin: 0 0 1.5rem;
 }
 
+/* A link takes --ink and an underline, never a hue. The Okabe-Ito tokens are
+   assigned by identity -- --hue-0 is a generator in the merit stack -- so
+   spending one on "this is a link" would put the same blue on two unrelated
+   meanings. Depth against the surrounding --ink-2 carries it instead:
+
+       --ink     #0b0b0b   19.17:1     the link
+       --ink-2   #52514e    7.73:1     the sentence around it
+
+   Both clear AA, the pair survives a grayscale print, and the underline is
+   what says "link" on its own where colour cannot. */
+.subhead a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.subhead a:hover {
+  text-decoration-thickness: 2px;
+}
+
 .panel {
   border: 1px solid var(--grid);
   border-radius: 3px;
