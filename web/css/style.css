@@ -1141,8 +1141,6 @@ button[aria-pressed="true"]:focus-visible {
   display: inline-block;
 }
 
-.flow-ramp-note { margin: 0.15rem 0 0; flex-basis: 100%; }
-
 /* The flow, over the wire on the map. Same path: the colour replaces the
    grey rather than fringing it, and the width is the flow in MW. The group
    carries data-results, so a refused solve fades it and leaves the topology

@@ -140,11 +140,6 @@
 
       <section class="panel">
         <h2>Levers</h2>
-        <dl class="key">
-          <dt>filled thumb</dt><dd>re-solves</dd>
-          <dt>hollow thumb</dt><dd>indexes the day already here</dd>
-          <dt>not debounced</dt><dd>a degenerate price flickers</dd>
-        </dl>
         <div id="levers"></div>
       </section>
     </div>
@@ -202,8 +197,6 @@
           <dl class="key">
             <dt>F<sub><i>k</i></sub></dt><dd>the rating, each way</dd>
             <dt>|&#956;<sub>k</sub>|</dt><dd>value of one more MW of rating</dd>
-            <dt>sign</dt><dd>positive at the lower limit, negative at the upper</dd>
-            <dt>no rating</dt><dd>no ticks, so the line can never bind</dd>
           </dl>
         </div>
       </section>
@@ -212,10 +205,6 @@
            column the smallest unit's bar is four pixels and reads as zero. -->
       <section class="panel span-all" data-results>
         <h2>Generation by Unit</h2>
-        <dl class="key">
-          <dt>bar</dt><dd>dispatch; the tick is capacity, the gap headroom</dd>
-          <dt>colour</dt><dd>the unit's identity, as in the merit order</dd>
-        </dl>
         <div id="units"></div>
         <div class="eq">
           <math display="block">
@@ -227,11 +216,10 @@
               <msub><mi>c</mi><mi>g</mi></msub>
             </mrow>
           </math>
-          <dl class="key">
-            <dt><code>off</code></dt><dd>not running</dd>
-            <dt><code>interior</code></dt><dd>part-loaded</dd>
-            <dt><code>at_max</code></dt><dd>full</dd>
-          </dl>
+          <p class="eq-note">
+            rc<sub><i>g</i></sub> is a generator&#8217;s marginal profit
+            (or loss) per additional MWh of generation at a given moment.
+          </p>
         </div>
       </section>
 
@@ -269,11 +257,6 @@
               <mo>=</mo><mn>0</mn>
             </mrow>
           </math>
-          <dl class="key">
-            <dt>two routes</dt><dd>once from the money, once from the duals</dd>
-            <dt>residual</dt><dd>the claim that they agree</dd>
-            <dt>per island, per hour</dt><dd>never summed</dd>
-          </dl>
         </div>
       </section>
 

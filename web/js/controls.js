@@ -357,10 +357,7 @@ export function mountLevers(root, state, { onEdit }) {
   /* ---- line ratings. An Override, not a config edit: clear() takes limits
      as its own argument, so moving a rating does not rewrite the scenario the
      rating belongs to, and dropping the override restores it exactly. */
-  const lines = group("Line Ratings", [
-    ["an override", "passed alongside the scenario, not an edit to it"],
-    ["∞", "unrated, not a very large rating"],
-  ]);
+  const lines = group("Line Ratings");
   for (const [line, branch] of Object.entries(state.branches)) {
     const s = slider({
       name: line,

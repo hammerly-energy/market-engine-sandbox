@@ -224,12 +224,6 @@ function legend() {
     wrap.append(item);
   }
 
-  const says = document.createElement("p");
-  says.className = "flow-ramp-note";
-  /* A legend entry, not a sentence: the panel's key already names the bar and
-     the sign, and this row names the tick. */
-  says.textContent = "tick: the rating — a bar reaching it is a line at its limit";
-  wrap.append(says);
   return wrap;
 }
 
