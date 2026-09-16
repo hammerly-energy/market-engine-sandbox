@@ -1,0 +1,25 @@
+# The image carries what serves a visitor and nothing else.
+#
+# data/ is the reason this file matters rather than being tidiness: raw/ is
+# gigabytes of downloads and none of it reaches a deploy. The editor emits
+# `blocks` configs whose load shape is inline, so the served scenario needs no
+# data file at all.
+
+.git
+.gitignore
+.venv
+.vscode
+.pytest_cache
+__pycache__
+**/__pycache__
+*.pyc
+.env
+
+data/
+runs/
+notebooks/
+tests/
+
+# The browser-run check pages. They exercise the frontend against fixtures and
+# have no place on a public URL.
+web/check-*.html

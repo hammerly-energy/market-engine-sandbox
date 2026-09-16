@@ -29,7 +29,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.api import bounds, wire
+from src.api import bounds, ratelimit, wire
 from src.api.bounds import BadRequest
 from src.ingest.scenario import scenario_from_config
 from src.model.clearing import clear
@@ -101,6 +101,8 @@ def limits():
         "max_bids": bounds.MAX_BIDS,
         "max_hours": bounds.MAX_HOURS,
         "load_sources": list(bounds.ALLOWED_LOAD_SOURCES),
+        # Not a cap on a body: a cap on how often one address may post them.
+        "max_solves_per_minute": ratelimit.limiter.max_calls,
     }
 
 
@@ -116,6 +118,14 @@ async def post_clear(request: Request):
     are clear()'s own arguments, passed through: the slack is a choice this
     layer makes (trap 2), and limits is the line-rating slider.
     """
+    # Before the body is read, not after. A refused caller should cost this
+    # process a dict lookup, not 64 KB of streaming -- and this is the only
+    # route that is rate limited, because it is the only one that solves.
+    try:
+        ratelimit.limiter.check(ratelimit.client_ip(request))
+    except BadRequest as exc:
+        return _error(exc)
+
     try:
         raw = await _read_capped(request)
     except BadRequest as exc:
