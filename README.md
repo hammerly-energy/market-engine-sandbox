@@ -1,14 +1,3 @@
----
-title: Market Engine Sandbox
-emoji: ⚡
-colorFrom: gray
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
-license: mit
----
-
 # Market Engine Sandbox
 
 An electricity market clearing engine, built from scratch. Given generator

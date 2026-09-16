@@ -39,12 +39,13 @@ COPY web/ ./web/
 # explicit line to prevent.
 ENV PYTHONPATH=/app
 
-# Hugging Face Spaces routes to 7860. PORT overrides it, which is what Render,
-# Fly and Cloud Run each set, so the same image runs unchanged on all four.
-ENV PORT=7860
-EXPOSE 7860
+# Render sets PORT and requires the server to bind 0.0.0.0; the CMD below does
+# both. The default is only for running this image by hand, where nothing sets
+# PORT -- on Render that branch is never taken.
+ENV PORT=10000
+EXPOSE 10000
 
 # One worker, deliberately. The rate limiter counts in-process, so a second
 # worker would let each allow the full rate (src/api/ratelimit.py). A solve on
 # this five-bus case is milliseconds, so concurrency buys nothing here anyway.
-CMD ["sh", "-c", "uvicorn src.api.app:app --host 0.0.0.0 --port ${PORT:-7860} --workers 1"]
+CMD ["sh", "-c", "uvicorn src.api.app:app --host 0.0.0.0 --port ${PORT:-10000} --workers 1"]
