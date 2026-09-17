@@ -1,17 +1,14 @@
 # Market Engine Sandbox
 
-An electricity market clearing engine, built from scratch. Given generator
+This is a basic interactive electricity market sandbox. Given generator
 offers, a load forecast, and a transmission network with limits, it answers
-who runs, at what output, and what a MWh is worth at each bus.
+who runs, at what output, and the local electricity price at each bus.
 
-Every solve is live. The levers include adding a bus and connecting a line,
-so there is no sweep to precompute — a topology that does not exist yet
-cannot be enumerated.
-
-Drag the `DE` rating down. As the line binds, the five buses stop sharing one
+The levers include adding a bus and connecting a line, so every solve is live.
+Move the `DE` rating down. As the line binds, the five buses stop sharing one
 price and a congestion component appears beside λ.
 
-## What a Price Is Here
+## Price Definition
 
 Prices are dual variables. The dual on the energy balance constraint is the
 marginal cost of serving one more MW, and that is the price — it is not
@@ -29,13 +26,9 @@ The settlement residual is on the page, in the Islands panel:
     payments − revenue = −Σ μ[l] · f[l]
 
 Both sides are reached independently — once from the money, once from the
-duals — and the residual is the claim that they agree. It is asserted per
-island and per hour, never summed, because a positive residual in one hour
-would otherwise cancel a negative one in another. The tests assert it on
-every solve, alongside a 120-seed fuzz over random topologies in which each
-generated network must either price or fail with one named reason.
+duals — and the residual verifies that they agree. 
 
-## How a Price Is Computed
+## Price Computation
 
 The stage each quantity is produced at, and what it is produced from. One
 `clear()` call runs all three charts; in the page flowchart further down, all of
