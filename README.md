@@ -34,7 +34,7 @@ The stage each quantity is produced at, and what it is produced from. One
 `clear()` call runs all three charts; in the page flowchart further down, all of
 this is the single node `clear scenario`.
 
-### The Matrices, Before Any Solve
+### Matrix Generation
 
 ```mermaid
 flowchart TD
@@ -66,7 +66,7 @@ flowchart TD
     scen --> fmax["Fmax — clearing.py<br>branch limit_mw, then the<br>limits= override,<br>each must exceed 0"]
 ```
 
-### The Solve
+### Price Computation
 
 ```mermaid
 flowchart TD
