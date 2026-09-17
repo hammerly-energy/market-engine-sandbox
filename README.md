@@ -34,7 +34,9 @@ The stage each quantity is produced at, and what it is produced from. One
 `clear()` call runs all three charts; in the page flowchart further down, all of
 this is the single node `clear scenario`.
 
-### Matrix Generation
+### Network Image
+
+This section turns the network diagram into matrices. It identifies islands of buses and how power injected at one bus splits across each line based on reactance. Primary outputs are the PTDF matrix, the list of islands with each island's slack, and Fmax, the line ratings.
 
 ```mermaid
 flowchart TD
@@ -66,7 +68,11 @@ flowchart TD
     scen --> fmax["Fmax — clearing.py<br>branch limit_mw, then the<br>limits= override,<br>each must exceed 0"]
 ```
 
-### Price Computation
+### Generation Level-Setting
+
+This section computes the level at which each generator runs and how much load is served, subject to line rating limits and to generation matching demand in each island. Merit order only holds when nothing is congested. Once a line meets its rating, a more expensive generator that can reach the load gets prioritized over a cheaper one that cannot. The objective is production cost minus the value of the load served, so a MW worth less than it costs to supply gets shed.
+
+Dispatch is the visible output. The duals are most useful. A dual is the price of a constraint: how much the objective improves if you relax that constraint by one unit. λ is the dual on each island's energy balance. μ is the dual on each line's rating.
 
 ```mermaid
 flowchart TD
@@ -91,7 +97,13 @@ flowchart TD
     muraw --> mu["mu = mu_up − mu_dn — pricing.py<br>the sign says which limit is holding"]
 ```
 
-### The Prices, Off Its Duals
+### Price Setting
+
+This section builds the local bus prices based on those duals. λ is the cost of one more MW anywhere in the island, ignoring the network. μ[l] is what one more MW of rating on line l would be worth, and it is zero unless the line is full. PTDF[l,i] is the fraction of a MW injected at bus i that lands on line l.
+
+So LMP[i] = λ + Σ PTDF[l,i]·μ[l] is the cost of one more MW at bus i, plus the cost of the redispatch that MW forces on every line already at its limit. A bus behind a congested line prices high, because relief has to come from a dearer unit on its own side. A bus that relieves the line prices below λ, and can go negative.
+
+Everything else in this section is read off the same numbers. Congestion share of each price, generator status and headroom, reduced costs, line loading, the uniqueness verdict, settlement. Nothing re-solves.
 
 ```mermaid
 flowchart LR
@@ -207,10 +219,9 @@ Then open `http://localhost:8000`. The `dev` extra carries `pytest` and the
 
     pytest
 
-## How the Page Works
+## Page Functionality
 
-The chart is the page as it stands. Every change routes through one state
-object in `state.js`, and `api.js` is the only module that posts.
+This section is the request path. The browser holds the editor state and draws the network from it. Dragging a bus redraws with no solve, and so does the hour slider, because the whole day comes back in one response. Everything else posts to the server, which rate limits, caps the body size and bounds checks before running the top three sections. The browser does no market arithmetic. Every number on screen is a field of the `clear()` return or a formatting of one.
 
 ```mermaid
 flowchart TD
