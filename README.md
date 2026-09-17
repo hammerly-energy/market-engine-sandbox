@@ -30,10 +30,6 @@ duals — and the residual verifies that they agree.
 
 ## Price Computation
 
-The stage each quantity is produced at, and what it is produced from. One
-`clear()` call runs all three charts; in the page flowchart further down, all of
-this is the single node `clear scenario`.
-
 ### Network Image
 
 This section turns the network diagram into matrices. It identifies islands of buses and how power injected at one bus splits across each line based on reactance. Primary outputs are the PTDF matrix, the list of islands with each island's slack, and Fmax, the line ratings.
