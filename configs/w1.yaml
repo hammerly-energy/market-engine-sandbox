@@ -41,10 +41,14 @@ fleet:
 # sign flipped. peak_mw is the most this bid will take, at the top of the
 # shape; value_usd_per_mwh is the most it will pay for a MWh.
 #
-# value_usd_per_mwh = 5000 is the ERCOT system-wide offer cap, and it is here
-# as a number in a config rather than a constant in the code because it is a
-# market parameter that MOVES: it was $9000/MWh before the 2021 legislation.
-# Verify it against the current Nodal Protocols before trusting it.
+# value_usd_per_mwh = 5000 is ERCOT's day-ahead system-wide offer cap, and it
+# is here as a number in a config rather than a constant in the code because
+# it is a market parameter that moves. It was $9000/MWh before the 2021
+# legislation, and RTC+B, live 2025-12-05, split the single $5000/MWh SWCAP
+# into a day-ahead DASWCAP at $5000 and a real-time RTSWCAP at $2000. This
+# engine solves a day-ahead market, so DASWCAP is the one it anchors to.
+# Checked 2026-09-16 against ERCOT's market notices. Verify it again against
+# the current Nodal Protocols before trusting it.
 #
 # Why the cap and not infinity: an infinite valuation is not a price, it is a
 # refusal to have one, and it puts inf into the objective. The cap says the

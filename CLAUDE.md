@@ -35,9 +35,13 @@ interesting part. The formulation questions the author has to answer are the
 ones with more than one defensible answer:
 
 - **What does an island mean?** Today `ptdf.py:48` refuses to price a
-  disconnected network at all. A real ISO would price each island separately,
-  with its own λ. Refusing is a choice, and it is the wrong one the moment a
-  visitor's first act is to cut a line.
+  disconnected network at all. The DC-OPF answer is one energy balance row per
+  connected component and one λ each, because PTDF is undefined across
+  components and the balance has to split with them. No ISO publishes that as
+  a market procedure — a real system split is an emergency handled
+  operationally, not priced as two markets — so the authority here is the
+  formulation, not practice. Refusing is still a choice, and it is the wrong
+  one the moment a visitor's first act is to cut a line.
 - **What does the engine say when load cannot be served?** Refuse, or admit a
   scarcity price and let λ rise to it. Both are real market designs.
 - **What happens when the slack is deleted?** Any bus works and prices do not
@@ -759,8 +763,9 @@ injection before writing the code — the benefit term drops out, but the
 identity is only trustworthy because it was derived.
 
 VOLL is a number one invents, so it lives in the config with provenance and is
-never hardcoded. ERCOT's system-wide offer cap is the natural anchor; check the
-current protocols rather than a remembered figure.
+never hardcoded. ERCOT's day-ahead system-wide offer cap is the natural
+anchor; check the current protocols rather than a remembered figure, and see
+the measurement under *Demand bids are named, not indexed* for what it is now.
 
 **Demand bids are named, not indexed.** `DemandBid(name, bus, mw, value)` is
 deliberately the mirror of `Generator(name, bus, cost, pmax)`, because
@@ -772,9 +777,26 @@ demand response — which is why M9(a) costs a line of YAML rather than an
 engine change.
 
 Firm load is valued at the **system-wide offer cap**, which lives in the
-config with its provenance and never in the code. ERCOT's has moved — it was
-$9000/MWh before the 2021 legislation — so a figure remembered from a
-write-up is exactly how a stale constant ends up looking like data.
+config with its provenance and never in the code. ERCOT's has moved twice, so
+a figure remembered from a write-up is exactly how a stale constant ends up
+looking like data:
+
+```
+    before 2021     $9000/MWh     one system-wide cap
+    2021-2025       $5000/MWh     one system-wide cap, SWCAP
+    from 2025-12-05 $5000/MWh     day-ahead, DASWCAP
+                    $2000/MWh     real-time, RTSWCAP
+```
+
+RTC+B split the single cap in two on 2025-12-05. This engine solves a
+day-ahead market, so DASWCAP is the figure `configs/w1.yaml` carries and the
+$5000 there is unchanged by the split. Checked 2026-09-16 against ERCOT's
+market notices.
+
+A cap is not a price cap, and ERCOT says so directly: an LMP may exceed it
+under congestion. That is the same fact as *An LMP is not bounded by the offer
+cap* under **Scope honesty**, reached from the protocols instead of from the
+LP.
 
 `value_usd_per_mwh = None` means inelastic and keeps demand on the right-hand
 side, which is how the data model, the config path and the tests could land
