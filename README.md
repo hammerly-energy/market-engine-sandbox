@@ -4,7 +4,7 @@ This is a basic interactive electricity market sandbox. Given generator offers, 
 
 ## Price Definition
 
-Prices are dual variables. A dual is the price of a constraint: how much the objective improves if you relax that constraint by one unit. The dual on the energy balance constraint is the marginal cost of serving one more MW, and that is the price — it is not computed by a pricing rule, it falls out of the optimization.
+Prices are dual variables. A dual is the price of a constraint: how much the objective improves if you relax that constraint by one unit. The dual on the energy balance constraint is the marginal cost of serving one more MW, and that is the price — it is not computed by a pricing rule, it falls out of the optimization. 
 
     LMP[i] = λ + Σ PTDF[l,i] · μ[l]
 
@@ -56,7 +56,7 @@ flowchart TD
 
 This section computes the level at which each generator runs and how much load is served, subject to line rating limits and to generation matching demand in each island. Merit order only holds when nothing is congested. Once a line meets its rating, a more expensive generator that can reach the load gets prioritized over a cheaper one that cannot. The objective is production cost minus the value of the load served, so a MW worth less than it costs to supply gets shed.
 
-Dispatch is the visible output. The duals are most useful. A dual is the price of a constraint: how much the objective improves if you relax that constraint by one unit. λ is the dual on each island's energy balance. μ is the dual on each line's rating.
+Dispatch is the visible output. The duals are most useful. A dual is the price of a constraint: how much the objective improves if you relax that constraint by one unit. 
 
 ```mermaid
 flowchart TD
