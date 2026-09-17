@@ -1,32 +1,20 @@
 # Market Engine Sandbox
 
-This is a basic interactive electricity market sandbox. Given generator
-offers, a load forecast, and a transmission network with limits, it answers
-who runs, at what output, and the local electricity price at each bus.
-
-The levers include adding a bus and connecting a line, so every solve is live.
-Move the `DE` rating down. As the line binds, the five buses stop sharing one
-price and a congestion component appears beside λ.
+This is a basic interactive electricity market sandbox. Given generator offers, a load forecast, and a transmission network with limits, it answers who runs, at what output, and the local electricity price at each bus. The levers include adding a bus and connecting a line, so every solve is live. Move the `DE` rating down. As the line binds, the five buses stop sharing one price and a congestion component appears beside λ.
 
 ## Price Definition
 
-Prices are dual variables. The dual on the energy balance constraint is the
-marginal cost of serving one more MW, and that is the price — it is not
-computed by a pricing rule, it falls out of the optimization.
+Prices are dual variables. A dual is the price of a constraint: how much the objective improves if you relax that constraint by one unit. The dual on the energy balance constraint is the marginal cost of serving one more MW, and that is the price — it is not computed by a pricing rule, it falls out of the optimization.
 
     LMP[i] = λ + Σ PTDF[l,i] · μ[l]
 
-λ is the dual on the island's energy balance and is the same at every bus in
-that island. μ[l] is the dual on line l's flow limit, zero unless the line is
-binding, and its sign carries which direction the line binds in. The sum is
-the congestion component.
+λ is the dual on the island's energy balance and is the same at every bus in that island. μ[l] is the dual on line l's flow limit, zero unless the line is binding, and its sign carries which direction the line binds in. The sum is the congestion component.
 
 The settlement residual is on the page, in the Islands panel:
 
     payments − revenue = −Σ μ[l] · f[l]
 
-Both sides are reached independently — once from the money, once from the
-duals — and the residual verifies that they agree. 
+Both sides are reached independently — once from the money, once from the duals — and the residual verifies that they agree. 
 
 ## Price Computation
 
